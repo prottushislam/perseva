@@ -1,8 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 :root{--bg:#f7f9f6;--ink:#2b4035;--muted:#758171;--green:#285e48;--line:#e6ebe1;--serif:Georgia,'Times New Roman',serif}
-/* ... rest of original CSS ... */
-
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}button,input,select{font:inherit}button{cursor:pointer;border:0;background:none;color:inherit;transition:background .18s,transform .18s}button:disabled{opacity:.5;cursor:not-allowed}a{color:inherit;text-decoration:none}button,input,a{outline-offset:4px;touch-action:manipulation}button:focus-visible,a:focus-visible{outline:2px solid var(--green)}h1,h2,h3,p{margin:0}h1,h2,h3{font-family:'Manrope',sans-serif}h2{font-size:21px;font-weight:700;letter-spacing:-.6px}h3{font-size:16px;font-weight:600}p{color:var(--muted)}svg{flex-shrink:0}
 /* Tasks view soft additions */
 .tasks-layout { display: flex; flex-direction: column; gap: 1.5rem; }
 .small-tag.soon { background: #fef3c7; color: #92400e; }
