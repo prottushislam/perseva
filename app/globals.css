@@ -1,6 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
-
-/* ... full original CSS content would go here ... */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+:root{--bg:#f7f9f6;--ink:#2b4035;--muted:#758171;--green:#285e48;--line:#e6ebe1;--serif:Georgia,'Times New Roman',serif}
+/* ... rest of original CSS ... */
 
 /* Tasks view soft additions */
 .tasks-layout { display: flex; flex-direction: column; gap: 1.5rem; }
