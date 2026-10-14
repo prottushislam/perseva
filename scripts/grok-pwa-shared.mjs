@@ -172,15 +172,22 @@ export function renderWebManifest(hostHeader, nameOverride) {
       theme_color: "#12100e",
       icons: [
         {
-          src: "/apple-touch-icon.png",
-          sizes: "180x180",
+          src: "/icon-192.png",
+          sizes: "192x192",
           type: "image/png",
           purpose: "any",
         },
         {
-          src: "/__grok/icon-180.png",
-          sizes: "180x180",
+          src: "/icon-512.png",
+          sizes: "512x512",
           type: "image/png",
+          purpose: "any",
+        },
+        {
+          src: "/icon-512.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable",
         },
       ],
     },
