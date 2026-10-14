@@ -157,8 +157,9 @@ export function renderInstallPageHtml(template, { host, url } = {}) {
     .replaceAll("{{APP_URL}}", escapeHtml(stripInstallParams(url)));
 }
 
-export function renderWebManifest(hostHeader) {
-  const name = appNameFromHost(hostHeader);
+export function renderWebManifest(hostHeader, nameOverride) {
+  const override = String(nameOverride ?? "").trim();
+  const name = override || appNameFromHost(hostHeader);
   return JSON.stringify(
     {
       name,
@@ -167,9 +168,15 @@ export function renderWebManifest(hostHeader) {
       start_url: "/",
       scope: "/",
       display: "standalone",
-      background_color: "#000000",
-      theme_color: "#000000",
+      background_color: "#12100e",
+      theme_color: "#12100e",
       icons: [
+        {
+          src: "/apple-touch-icon.png",
+          sizes: "180x180",
+          type: "image/png",
+          purpose: "any",
+        },
         {
           src: "/__grok/icon-180.png",
           sizes: "180x180",
