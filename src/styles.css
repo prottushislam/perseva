@@ -6,8 +6,8 @@
   --color-ink: #f4eee6;
   --color-muted: #b7ab9e;
   --color-line: #3a342e;
-  --color-accent: #e2b08a;
-  --color-accent-soft: #2c241e;
+  --color-accent: #1f9a74;
+  --color-accent-soft: #163028;
   --color-scrim: #000000;
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Newsreader", ui-serif, Georgia, serif;
@@ -46,6 +46,15 @@
 
   p {
     text-wrap: pretty;
+  }
+
+  section.border,
+  aside {
+    border-radius: 1.25rem;
+  }
+
+  button.bg-accent {
+    border-radius: 0.8rem;
   }
 }
 

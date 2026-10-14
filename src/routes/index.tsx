@@ -210,9 +210,10 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-bg text-ink">
-      <aside className={`${menu ? "fixed inset-y-0 left-0 z-30 flex" : "hidden"} w-60 flex-col border-r border-line bg-surface px-5 py-8 md:fixed md:flex`}>
-        <button type="button" className="mb-10 px-2 text-left font-display text-3xl" onClick={() => go("today")}>
-          Perseva
+      <aside className={`${menu ? "fixed inset-y-0 left-0 z-30 flex" : "hidden"} w-64 flex-col border border-line bg-surface p-4 md:fixed md:top-4 md:bottom-4 md:left-4 md:flex`}>
+        <button type="button" className="mb-8 flex items-center gap-3 rounded-2xl px-2 py-1 text-left" onClick={() => go("today")}>
+          <img src="/logo.png" alt="" className="size-12 rounded-2xl" />
+          <span className="font-display text-3xl leading-none">Perseva</span>
         </button>
         <nav className="flex flex-col gap-1">
           {NAV.map((item) => {
@@ -223,7 +224,7 @@ function Home() {
                 key={item.id}
                 type="button"
                 onClick={() => go(item.id)}
-                className={`flex h-11 items-center gap-3 px-2 text-left text-sm ${active ? "border-l-2 border-ink pl-3 font-medium text-ink" : "text-muted"}`}
+                className={`flex h-11 items-center gap-3 rounded-xl px-3 text-left text-sm ${active ? "bg-accent/15 font-medium text-ink" : "text-muted"}`}
               >
                 <Icon size={16} strokeWidth={1.5} />
                 {item.label}
@@ -238,11 +239,11 @@ function Home() {
       </aside>
       {menu ? <button type="button" aria-label="Close menu" className="fixed inset-0 z-20 bg-scrim/60 md:hidden" onClick={() => setMenu(false)} /> : null}
 
-      <div className="md:pl-60">
+      <div className="md:pl-72">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/90 px-4 backdrop-blur md:px-8">
           <div className="flex items-center gap-3 text-sm text-muted">
-            <button type="button" className="grid size-11 place-items-center md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
-              <Menu size={18} />
+            <button type="button" className="md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
+              <img src="/logo.png" alt="" className="size-9 rounded-xl" />
             </button>
             <span className="text-ink">{NAV.find((n) => n.id === view)?.label}</span>
           </div>
@@ -265,7 +266,7 @@ function Home() {
             </div>
             {view === "today" ? <Goal minutes={totalToday} goal={store.preferences.dailyGoal} /> : null}
             {view === "plan" && planTab === "week" ? (
-              <button type="button" className="h-11 bg-ink px-4 text-sm text-bg" onClick={() => setEditor(blankRoutine(selectedDay))}>
+              <button type="button" className="h-11 bg-accent px-4 text-sm text-[#06211a]" onClick={() => setEditor(blankRoutine(selectedDay))}>
                 Add a block
               </button>
             ) : null}
@@ -319,7 +320,7 @@ function Home() {
                     ["notes", "Notes"],
                   ] as const
                 ).map(([id, label]) => (
-                  <button key={id} type="button" onClick={() => setPlanTab(id)} className={`h-12 text-sm ${planTab === id ? "bg-ink text-bg" : "text-muted"}`}>
+                  <button key={id} type="button" onClick={() => setPlanTab(id)} className={`h-12 text-sm ${planTab === id ? "bg-accent text-[#06211a]" : "text-muted"}`}>
                     {label}
                   </button>
                 ))}
@@ -398,7 +399,7 @@ function Home() {
       {toast ? <div className={`fixed left-1/2 z-40 -translate-x-1/2 bg-ink px-4 py-3 text-sm text-bg ${sound ? "bottom-32 md:bottom-20" : "bottom-20 md:bottom-6"}`}>{toast}</div> : null}
 
       {sound ? (
-        <div className="fixed inset-x-0 bottom-16 z-30 flex items-center justify-between gap-3 border-t border-line bg-surface px-4 py-3 md:bottom-0 md:left-60">
+        <div className="fixed inset-x-0 bottom-16 z-30 flex items-center justify-between gap-3 border-t border-line bg-surface px-4 py-3 md:bottom-4 md:left-72 md:right-4 md:rounded-2xl md:border">
           <p className="min-w-0 truncate text-sm">
             <span className="text-muted">Playing </span>
             {SOUNDS.find((item) => item.id === sound)?.title}
@@ -501,7 +502,7 @@ function Home() {
             </button>
             <button
               type="button"
-              className="h-11 bg-ink px-4 text-sm text-bg"
+              className="h-11 bg-accent px-4 text-sm text-[#06211a]"
               onClick={() => {
                 store.endSession(false);
                 setConfirmEnd(false);
@@ -593,7 +594,7 @@ function Today({
           </div>
           <div className="mb-4 grid grid-cols-7 gap-1">
             {[1, 2, 3, 4, 5, 6, 0].map((d) => (
-              <button key={d} type="button" onClick={() => onOpenSchedule(d)} className={`h-10 text-xs ${d === date.getDay() ? "bg-ink text-bg" : "text-muted"}`}>
+              <button key={d} type="button" onClick={() => onOpenSchedule(d)} className={`h-10 text-xs ${d === date.getDay() ? "bg-accent text-[#06211a]" : "text-muted"}`}>
                 {DAYS[d].slice(0, 1)}
               </button>
             ))}
@@ -606,7 +607,7 @@ function Today({
             <div className="py-8 text-center">
               <h3 className="text-xl">Nothing planned yet.</h3>
               <p className="mx-auto mt-2 max-w-xs text-sm text-muted">{hasAny ? "Today is open." : "A subject, a time, a small promise."}</p>
-              <button type="button" className="mt-4 h-11 bg-ink px-4 text-sm text-bg" onClick={onAdd}>
+              <button type="button" className="mt-4 h-11 bg-accent px-4 text-sm text-[#06211a]" onClick={onAdd}>
                 Add a block
               </button>
               {!hasAny ? (
@@ -671,7 +672,7 @@ function Stat({ icon, label, value, hint }: { icon: ReactNode; label: string; va
 function RoutineRow({ routine, done, active, onToggle, onEdit }: { routine: Routine; done: boolean; active: boolean; onToggle: () => void; onEdit: () => void }) {
   return (
     <div className={`flex items-center gap-3 border-t border-line py-3 ${done ? "opacity-60" : ""}`}>
-      <button type="button" aria-label={done ? `Unmark ${routine.subject}` : `Complete ${routine.subject}`} onClick={onToggle} className={`grid size-10 place-items-center border ${done ? "border-ink bg-ink text-bg" : "border-line"}`}>
+      <button type="button" aria-label={done ? `Unmark ${routine.subject}` : `Complete ${routine.subject}`} onClick={onToggle} className={`grid size-10 place-items-center border ${done ? "border-ink bg-accent text-[#06211a]" : "border-line"}`}>
         {done ? <Check size={15} /> : <BookOpen size={15} />}
       </button>
       <div className="min-w-0 flex-1">
@@ -712,7 +713,7 @@ function Schedule({
     <section className="border border-line bg-surface p-6">
       <div className="mb-6 flex flex-wrap gap-2">
         {DAYS.map((label, i) => (
-          <button key={label} type="button" onClick={() => setDay(i)} className={`h-11 min-w-12 px-3 text-sm ${i === day ? "bg-ink text-bg" : "text-muted"}`}>
+          <button key={label} type="button" onClick={() => setDay(i)} className={`h-11 min-w-12 px-3 text-sm ${i === day ? "bg-accent text-[#06211a]" : "text-muted"}`}>
             {label}
           </button>
         ))}
@@ -723,7 +724,7 @@ function Schedule({
       ) : (
         <div className="py-10 text-center">
           <p className="text-muted">Nothing on this day.</p>
-          <button type="button" className="mt-4 h-11 bg-ink px-4 text-sm text-bg" onClick={onAdd}>
+          <button type="button" className="mt-4 h-11 bg-accent px-4 text-sm text-[#06211a]" onClick={onAdd}>
             Add a block
           </button>
         </div>
@@ -762,10 +763,10 @@ function FocusCard(props: {
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-2xl">Focus</h2>
         <div className="flex border border-line">
-          <button type="button" disabled={Boolean(breakEnd)} className={`h-10 px-3 text-sm ${mode === "focus" ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setMode("focus")}>
+          <button type="button" disabled={Boolean(breakEnd)} className={`h-10 px-3 text-sm ${mode === "focus" ? "bg-accent text-[#06211a]" : "text-muted"}`} onClick={() => setMode("focus")}>
             Focus
           </button>
-          <button type="button" disabled={Boolean(session)} className={`h-10 px-3 text-sm ${mode === "break" ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setMode("break")}>
+          <button type="button" disabled={Boolean(session)} className={`h-10 px-3 text-sm ${mode === "break" ? "bg-accent text-[#06211a]" : "text-muted"}`} onClick={() => setMode("break")}>
             Break
           </button>
         </div>
@@ -789,11 +790,11 @@ function FocusCard(props: {
       {!session && mode === "focus" ? (
         <div className="mb-4 flex flex-wrap justify-center gap-2">
           {[25, 45, 60].map((m) => (
-            <button key={m} type="button" className={`h-10 px-3 text-sm ${!custom && duration === m ? "bg-ink text-bg" : "text-muted"}`} onClick={() => { setCustom(false); setDuration(m); }}>
+            <button key={m} type="button" className={`h-10 px-3 text-sm ${!custom && duration === m ? "bg-accent text-[#06211a]" : "text-muted"}`} onClick={() => { setCustom(false); setDuration(m); }}>
               {m} min
             </button>
           ))}
-          <button type="button" className={`h-10 px-3 text-sm ${custom ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setCustom(!custom)}>
+          <button type="button" className={`h-10 px-3 text-sm ${custom ? "bg-accent text-[#06211a]" : "text-muted"}`} onClick={() => setCustom(!custom)}>
             Custom
           </button>
           {custom ? (
@@ -819,7 +820,7 @@ function FocusCard(props: {
           </button>
         )}
       </div>
-      <button type="button" onClick={active ? onStop : onStart} className="mt-6 h-12 w-full bg-ink text-sm text-bg">
+      <button type="button" onClick={active ? onStop : onStart} className="mt-6 h-12 w-full bg-accent text-sm text-[#06211a]">
         {active ? "End session" : mode === "break" ? "Start a 5-minute break" : "Start focus"}
       </button>
     </section>
@@ -897,7 +898,7 @@ function Tasks({
       <Panel title="Assignments" action="Add" onAction={onNewAssignment}>
         {sortedA.length === 0 ? <Empty copy="Add one so a deadline does not sneak up." /> : sortedA.map((a) => (
           <div key={a.id} className="flex items-center gap-2 border-t border-line py-3">
-            <button type="button" aria-label={`Toggle ${a.title}`} onClick={() => onToggle(a.id)} className={`grid size-10 place-items-center border ${a.completed ? "border-ink bg-ink text-bg" : "border-line"}`}>
+            <button type="button" aria-label={`Toggle ${a.title}`} onClick={() => onToggle(a.id)} className={`grid size-10 place-items-center border ${a.completed ? "border-ink bg-accent text-[#06211a]" : "border-line"}`}>
               {a.completed ? <Check size={15} /> : <BookOpen size={15} />}
             </button>
             <div className="min-w-0 flex-1">
@@ -1036,7 +1037,7 @@ function RoutineDialog({ routine, onClose, onSave, onDelete }: { routine: Routin
           {DAYS.map((label, i) => {
             const on = draft.days.includes(i);
             return (
-              <button key={label} type="button" className={`h-10 min-w-11 px-2 text-sm ${on ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setDraft({ ...draft, days: on ? draft.days.filter((d) => d !== i) : [...draft.days, i].sort() })}>
+              <button key={label} type="button" className={`h-10 min-w-11 px-2 text-sm ${on ? "bg-accent text-[#06211a]" : "text-muted"}`} onClick={() => setDraft({ ...draft, days: on ? draft.days.filter((d) => d !== i) : [...draft.days, i].sort() })}>
                 {label}
               </button>
             );
@@ -1108,7 +1109,7 @@ function SettingsDialog({ name, goal, onClose, onSave }: { name: string; goal: n
         <Field label="Name"><input maxLength={40} className={inputClass} value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="What should we call you?" /></Field>
         <Field label="Daily intention, in minutes"><input type="number" min={15} max={720} className={inputClass} value={draftGoal} onChange={(e) => setDraftGoal(Number(e.target.value) || 120)} /></Field>
         <p className="mb-4 text-xs text-muted">Plans, focus, deadlines, and notes stay on this device.</p>
-        <button type="submit" className="h-11 w-full bg-ink text-sm text-bg">Save</button>
+        <button type="submit" className="h-11 w-full bg-accent text-sm text-[#06211a]">Save</button>
       </form>
     </Modal>
   );
@@ -1122,7 +1123,7 @@ function DialogActions({ existing, onDelete }: { existing: boolean; onDelete: ()
           <Trash2 size={14} /> Delete
         </button>
       ) : <span />}
-      <button type="submit" className="h-11 bg-ink px-5 text-sm text-bg">Save</button>
+      <button type="submit" className="h-11 bg-accent px-5 text-sm text-[#06211a]">Save</button>
     </div>
   );
 }
