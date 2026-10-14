@@ -10,7 +10,7 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Perseva — A little further, every day" },
       { name: "description", content: "A quiet study space for focus, a weekly plan, deadlines, notes, and a soft piano." },
-      { name: "theme-color", content: "#f6f1e8" },
+      { name: "theme-color", content: "#12100e" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

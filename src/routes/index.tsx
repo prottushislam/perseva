@@ -226,7 +226,7 @@ function Home() {
           A little further, every day.
         </p>
       </aside>
-      {menu ? <button type="button" aria-label="Close menu" className="fixed inset-0 z-20 bg-ink/30 md:hidden" onClick={() => setMenu(false)} /> : null}
+      {menu ? <button type="button" aria-label="Close menu" className="fixed inset-0 z-20 bg-scrim/60 md:hidden" onClick={() => setMenu(false)} /> : null}
 
       <div className="md:pl-60">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/90 px-4 backdrop-blur md:px-8">
@@ -917,7 +917,7 @@ function Progress({ weekly, history, streak, goal }: { weekly: { label: string; 
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-ink/40 p-4 sm:place-items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-end bg-scrim/70 p-4 sm:place-items-center" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={title} className="max-h-[90vh] w-full max-w-lg overflow-auto bg-surface p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-3xl">{title}</h2>
