@@ -1,6 +1,0 @@
-CREATE TABLE IF NOT EXISTS study_spaces (
-  id TEXT PRIMARY KEY NOT NULL,
-  data TEXT NOT NULL,
-  revision INTEGER DEFAULT 0 NOT NULL,
-  updated_at INTEGER NOT NULL
-);
