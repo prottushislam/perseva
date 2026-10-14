@@ -29,6 +29,7 @@ export type HistoryItem = {
   minutes: number;
   endedAt: number;
   completed: boolean;
+  reflection: string;
 };
 
 export type Assignment = {
@@ -73,6 +74,7 @@ type Data = {
   assignments: Assignment[];
   exams: Exam[];
   notes: Note[];
+  intentionByDay: Record<string, string>;
 };
 
 type Actions = {
@@ -81,7 +83,8 @@ type Actions = {
   addStarter: () => void;
   toggleCompletion: (key: string) => void;
   startSession: (subject: string, minutes: number) => void;
-  endSession: (completed: boolean) => void;
+  endSession: (completed: boolean, reflection: string) => void;
+  setIntention: (day: string, text: string) => void;
   setPreferences: (next: Preferences) => void;
   upsertAssignment: (item: Assignment) => void;
   removeAssignment: (id: string) => void;
@@ -101,6 +104,7 @@ const empty: Data = {
   assignments: [],
   exams: [],
   notes: [],
+  intentionByDay: {},
 };
 
 export const useStudy = create<Data & Actions>()(
@@ -148,7 +152,7 @@ export const useStudy = create<Data & Actions>()(
           },
         });
       },
-      endSession: (completed) => {
+      endSession: (completed, reflection) => {
         const session = get().session;
         if (!session) return;
         const elapsed = Math.max(0, Math.min(session.duration, (Date.now() - session.startedAt) / 60_000));
@@ -163,10 +167,13 @@ export const useStudy = create<Data & Actions>()(
               minutes,
               endedAt: Date.now(),
               completed,
+              reflection: reflection.trim().slice(0, 280),
             },
           ].slice(-400),
         }));
       },
+      setIntention: (day, text) =>
+        set((s) => ({ intentionByDay: { ...s.intentionByDay, [day]: text.slice(0, 140) } })),
       setPreferences: (preferences) => set({ preferences }),
       upsertAssignment: (item) =>
         set((s) => ({
@@ -206,6 +213,7 @@ export const useStudy = create<Data & Actions>()(
         assignments: s.assignments,
         exams: s.exams,
         notes: s.notes,
+        intentionByDay: s.intentionByDay,
       }),
     },
   ),

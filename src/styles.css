@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #f4f7f2;
-  --color-surface: #ffffff;
-  --color-ink: #24382d;
-  --color-muted: #6d7d72;
-  --color-line: #e3ebe4;
-  --color-sage: #2f6a4f;
-  --color-sage-deep: #234f3b;
-  --color-sage-soft: #e7f0e8;
-  --color-leaf: #6f915c;
-  --color-peach: #b56a32;
-  --color-peach-soft: #f8efe4;
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --radius-card: 1.25rem;
+  --color-bg: #f6f1e8;
+  --color-surface: #fffdf8;
+  --color-ink: #1a1714;
+  --color-muted: #746b60;
+  --color-line: #e4dcd0;
+  --color-accent: #7a3e2e;
+  --color-accent-soft: #f3e7e1;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
 }
 
 @layer base {
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   html,
@@ -34,12 +34,27 @@
   h2,
   h3 {
     font-family: var(--font-display);
-    letter-spacing: -0.03em;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 }
 
-.timer-ring {
-  background: conic-gradient(var(--color-sage) var(--p, 0%), var(--color-sage-soft) 0);
+.field {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  background: transparent;
+  padding: 0.65rem 0;
+  color: var(--color-ink);
+  outline: none;
+}
+
+.field:focus {
+  border-bottom-color: var(--color-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
