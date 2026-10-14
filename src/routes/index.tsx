@@ -260,7 +260,7 @@ function Home() {
           <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
             <div className="max-w-xl">
               <p className="text-sm text-muted">{date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
-              <h1 className="mt-2 text-[2.7rem] leading-[1.08] md:text-6xl">{headings[view].title}</h1>
+              <h1 className="mt-3 max-w-xl text-[2.15rem] leading-[1.12] md:text-5xl">{headings[view].title}</h1>
               <p className="mt-3 text-muted">{headings[view].copy}</p>
             </div>
             {view === "today" ? <Goal minutes={totalToday} goal={store.preferences.dailyGoal} /> : null}
