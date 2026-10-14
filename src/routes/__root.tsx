@@ -9,7 +9,7 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Perseva — A little further, every day" },
-      { name: "description", content: "A quiet study space for focus, a weekly plan, deadlines, notes, and peaceful sound." },
+      { name: "description", content: "A quiet study space for focus, a weekly plan, deadlines, notes, and a soft piano." },
       { name: "theme-color", content: "#f6f1e8" },
     ],
     links: [

@@ -6,7 +6,6 @@ import {
   Check,
   Clock3,
   Flame,
-  Headphones,
   LayoutDashboard,
   Menu,
   Pencil,
@@ -28,26 +27,18 @@ import {
   type Note,
   type Routine,
 } from "@/lib/study";
-import { Soundscape, type SoundKind } from "@/lib/soundscape";
+import { Soundscape } from "@/lib/soundscape";
 
 export const Route = createFileRoute("/")({ component: Home });
 
-type View = "today" | "schedule" | "focus" | "tasks" | "sounds" | "progress";
+type View = "today" | "focus" | "plan" | "progress";
+type PlanTab = "week" | "due" | "notes";
 
 const NAV: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "today", label: "Today", icon: LayoutDashboard },
-  { id: "schedule", label: "Schedule", icon: CalendarDays },
   { id: "focus", label: "Focus", icon: Timer },
-  { id: "tasks", label: "Tasks", icon: BookOpen },
-  { id: "sounds", label: "Sounds", icon: Headphones },
+  { id: "plan", label: "Plan", icon: CalendarDays },
   { id: "progress", label: "Progress", icon: Flame },
-];
-
-const SOUNDS: { id: SoundKind; title: string; copy: string }[] = [
-  { id: "piano", title: "Piano", copy: "Soft notes, far apart." },
-  { id: "violin", title: "Violin", copy: "A slow bow, barely there." },
-  { id: "cello", title: "Cello", copy: "Low and warm, never hurried." },
-  { id: "rain", title: "Rain", copy: "A quiet hush behind the work." },
 ];
 
 function Home() {
@@ -63,13 +54,14 @@ function Home() {
   const [exam, setExam] = useState<Exam | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDay());
+  const [planTab, setPlanTab] = useState<PlanTab>("week");
   const [duration, setDuration] = useState(25);
   const [custom, setCustom] = useState(false);
   const [subject, setSubject] = useState("Deep work");
   const [mode, setMode] = useState<"focus" | "break">("focus");
   const [breakEnd, setBreakEnd] = useState<number | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const [sound, setSound] = useState<SoundKind | null>(null);
+  const [piano, setPiano] = useState(false);
   const [volume, setVolume] = useState(0.35);
   const audio = useRef<Soundscape | null>(null);
   const ending = useRef(false);
@@ -147,15 +139,15 @@ function Home() {
     setMenu(false);
   }
 
-  async function play(kind: SoundKind) {
-    if (sound === kind) {
+  async function togglePiano() {
+    if (piano) {
       audio.current?.stop();
-      setSound(null);
+      setPiano(false);
       return;
     }
     if (!audio.current) audio.current = new Soundscape();
-    await audio.current.play(kind, volume);
-    setSound(kind);
+    await audio.current.play(volume);
+    setPiano(true);
   }
 
   function changeVolume(value: number) {
@@ -166,12 +158,10 @@ function Home() {
   const headings: Record<View, { title: string; copy: string }> = {
     today: {
       title: store.preferences.name ? `Good to see you, ${store.preferences.name}.` : "A little further, every day.",
-      copy: "Your plan, one focus, and what is coming up.",
+      copy: "Today’s hours, what is due, and a quiet place to focus.",
     },
-    schedule: { title: "The week, quietly arranged.", copy: "A subject and a time. That is enough." },
-    focus: { title: "Stay with one thing.", copy: "Set the length, close the rest of the day." },
-    tasks: { title: "What is waiting.", copy: "Assignments, exams, and the notes you want to keep." },
-    sounds: { title: "A softer room.", copy: "Piano, violin, cello, or rain. Nothing loud." },
+    focus: { title: "Stay with one thing.", copy: "Set the length. Piano, if you want it." },
+    plan: { title: "The week and what is due.", copy: "Hours, deadlines, and the notes you want to keep." },
     progress: { title: "The time you have given.", copy: "A week, a streak, and the sessions you finished." },
   };
 
@@ -188,10 +178,10 @@ function Home() {
       session={store.session}
       breakEnd={breakEnd}
       now={now}
-      sound={sound}
+      piano={piano}
       volume={volume}
       onVolume={changeVolume}
-      onPlay={(kind) => void play(kind)}
+      onPiano={() => void togglePiano()}
       onStart={() => {
         if (mode === "break") {
           setBreakEnd(Date.now() + 5 * 60_000);
@@ -263,7 +253,7 @@ function Home() {
               <p className="mt-3 text-muted">{headings[view].copy}</p>
             </div>
             {view === "today" ? <Goal minutes={totalToday} goal={store.preferences.dailyGoal} /> : null}
-            {view === "schedule" ? (
+            {view === "plan" && planTab === "week" ? (
               <button type="button" className="h-11 bg-ink px-4 text-sm text-bg" onClick={() => setEditor(blankRoutine(selectedDay))}>
                 Add a block
               </button>
@@ -285,7 +275,7 @@ function Home() {
               streak={streak}
               finished={finishedToday}
               hasAny={store.routines.length > 0}
-              focus={focusCard}
+              focusing={Boolean(store.session)}
               onToggle={(id) => store.toggleCompletion(`${today}:${id}`)}
               onEdit={setEditor}
               onAdd={() => setEditor(blankRoutine(date.getDay()))}
@@ -293,75 +283,92 @@ function Home() {
                 store.addStarter();
                 setToast("A weekday plan is in place. Change it as you like.");
               }}
+              onOpenFocus={() => go("focus")}
               onOpenSchedule={(day) => {
                 setSelectedDay(day);
-                go("schedule");
+                setPlanTab("week");
+                go("plan");
               }}
-              onOpenTasks={() => go("tasks")}
+              onOpenTasks={() => {
+                setPlanTab("due");
+                go("plan");
+              }}
             />
           ) : null}
 
-          {view === "schedule" ? (
-            <Schedule
-              day={selectedDay}
-              setDay={setSelectedDay}
-              routines={store.routines}
-              today={today}
-              completions={store.completions}
-              onToggle={(id) => store.toggleCompletion(`${today}:${id}`)}
-              onEdit={setEditor}
-              onAdd={() => setEditor(blankRoutine(selectedDay))}
-            />
-          ) : null}
+          {view === "focus" ? <div className="mx-auto max-w-xl">{focusCard}</div> : null}
 
-          {view === "focus" ? (
-            <div className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
-              {focusCard}
-              <section className="border border-line bg-surface p-6">
-                <h2 className="text-2xl">Atmosphere</h2>
-                <div className="mt-4">
-                  <SoundPicker sound={sound} onPlay={(kind) => void play(kind)} compact />
-                </div>
-              </section>
+          {view === "plan" ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-3 border border-line bg-surface">
+                {(
+                  [
+                    ["week", "Week"],
+                    ["due", "Due"],
+                    ["notes", "Notes"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button key={id} type="button" onClick={() => setPlanTab(id)} className={`h-12 text-sm ${planTab === id ? "bg-ink text-bg" : "text-muted"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {planTab === "week" ? (
+                <Schedule
+                  day={selectedDay}
+                  setDay={setSelectedDay}
+                  routines={store.routines}
+                  today={today}
+                  completions={store.completions}
+                  onToggle={(id) => store.toggleCompletion(`${today}:${id}`)}
+                  onEdit={setEditor}
+                  onAdd={() => setEditor(blankRoutine(selectedDay))}
+                />
+              ) : null}
+              {planTab === "due" ? (
+                <Tasks
+                  part="due"
+                  assignments={store.assignments}
+                  exams={store.exams}
+                  notes={store.notes}
+                  onToggle={store.toggleAssignment}
+                  onEditAssignment={setAssignment}
+                  onEditExam={setExam}
+                  onEditNote={setNote}
+                  onNewAssignment={() => setAssignment(blankAssignment())}
+                  onNewExam={() => setExam(blankExam())}
+                  onNewNote={() => setNote(blankNote())}
+                />
+              ) : null}
+              {planTab === "notes" ? (
+                <Tasks
+                  part="notes"
+                  assignments={store.assignments}
+                  exams={store.exams}
+                  notes={store.notes}
+                  onToggle={store.toggleAssignment}
+                  onEditAssignment={setAssignment}
+                  onEditExam={setExam}
+                  onEditNote={setNote}
+                  onNewAssignment={() => setAssignment(blankAssignment())}
+                  onNewExam={() => setExam(blankExam())}
+                  onNewNote={() => setNote(blankNote())}
+                />
+              ) : null}
             </div>
-          ) : null}
-
-          {view === "tasks" ? (
-            <Tasks
-              assignments={store.assignments}
-              exams={store.exams}
-              notes={store.notes}
-              onToggle={store.toggleAssignment}
-              onEditAssignment={setAssignment}
-              onEditExam={setExam}
-              onEditNote={setNote}
-              onNewAssignment={() => setAssignment(blankAssignment())}
-              onNewExam={() => setExam(blankExam())}
-              onNewNote={() => setNote(blankNote())}
-            />
-          ) : null}
-
-          {view === "sounds" ? (
-            <section className="border border-line bg-surface p-6">
-              <SoundPicker sound={sound} onPlay={(kind) => void play(kind)} />
-              <label className="mt-8 flex items-center gap-4 text-sm text-muted">
-                Volume
-                <input type="range" min={0} max={1} step={0.01} value={volume} className="flex-1 accent-ink" onChange={(e) => changeVolume(Number(e.target.value))} />
-              </label>
-            </section>
           ) : null}
 
           {view === "progress" ? <Progress weekly={weekly} history={store.history} streak={streak} goal={store.preferences.dailyGoal} /> : null}
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line bg-surface md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-surface md:hidden">
         {NAV.map((item) => {
           const Icon = item.icon;
           const active = view === item.id;
           return (
-            <button key={item.id} type="button" onClick={() => go(item.id)} className={`flex flex-col items-center gap-1 py-2 text-[11px] ${active ? "text-ink" : "text-muted"}`}>
-              <Icon size={16} strokeWidth={1.5} />
+            <button key={item.id} type="button" onClick={() => go(item.id)} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${active ? "text-ink" : "text-muted"}`}>
+              <Icon size={18} strokeWidth={1.5} />
               {item.label}
             </button>
           );
@@ -498,11 +505,12 @@ function Today({
   streak,
   finished,
   hasAny,
-  focus,
+  focusing,
   onToggle,
   onEdit,
   onAdd,
   onStarter,
+  onOpenFocus,
   onOpenSchedule,
   onOpenTasks,
 }: {
@@ -517,11 +525,12 @@ function Today({
   streak: number;
   finished: number;
   hasAny: boolean;
-  focus: ReactNode;
+  focusing: boolean;
   onToggle: (id: string) => void;
   onEdit: (r: Routine) => void;
   onAdd: () => void;
   onStarter: () => void;
+  onOpenFocus: () => void;
   onOpenSchedule: (day: number) => void;
   onOpenTasks: () => void;
 }) {
@@ -529,9 +538,14 @@ function Today({
   const nextExam = [...exams].sort((a, b) => a.date.localeCompare(b.date))[0];
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
-        {focus}
-        <section className="border border-line bg-surface p-6">
+      <button type="button" onClick={onOpenFocus} className="flex w-full items-center justify-between border border-line bg-surface px-5 py-4 text-left">
+        <span>
+          <span className="block text-xs text-muted">Focus</span>
+          <span className="mt-1 block font-display text-2xl">{focusing ? "A session is open" : "Start a quiet sitting"}</span>
+        </span>
+        <span className="text-sm text-accent">{focusing ? "Return" : "Open"}</span>
+      </button>
+      <section className="border border-line bg-surface p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-2xl">Today’s schedule</h2>
             <button type="button" className="inline-flex h-11 items-center gap-1 text-sm text-accent" onClick={onAdd}>
@@ -564,7 +578,6 @@ function Today({
             </div>
           )}
         </section>
-      </div>
       <section className="border border-line bg-surface p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-2xl">Coming up</h2>
@@ -692,14 +705,14 @@ function FocusCard(props: {
   session: { subject: string; endsAt: number; duration: number } | null;
   breakEnd: number | null;
   now: number;
-  sound: SoundKind | null;
+  piano: boolean;
   volume: number;
   onVolume: (n: number) => void;
-  onPlay: (k: SoundKind) => void;
+  onPiano: () => void;
   onStart: () => void;
   onStop: () => void;
 }) {
-  const { mode, setMode, duration, setDuration, custom, setCustom, subject, setSubject, session, breakEnd, now, sound, volume, onVolume, onPlay, onStart, onStop } = props;
+  const { mode, setMode, duration, setDuration, custom, setCustom, subject, setSubject, session, breakEnd, now, piano, volume, onVolume, onPiano, onStart, onStop } = props;
   const running = mode === "break" ? breakEnd : session?.endsAt;
   const total = mode === "break" ? 300 : (session?.duration || duration) * 60;
   const seconds = running ? Math.max(0, Math.ceil((running - now) / 1000)) : total;
@@ -753,34 +766,19 @@ function FocusCard(props: {
           ) : null}
         </div>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-3 text-sm">
-          {SOUNDS.map((item) => (
-            <button key={item.id} type="button" onClick={() => onPlay(item.id)} className={sound === item.id ? "text-ink" : "text-muted"}>
-              {item.title}
-            </button>
-          ))}
-        </div>
-        <input aria-label="Sound volume" type="range" min={0} max={1} step={0.01} value={volume} className="w-24 accent-ink" onChange={(e) => onVolume(Number(e.target.value))} />
+      <div className="flex items-center justify-between gap-4">
+        <button type="button" onClick={onPiano} className={`h-11 px-1 text-sm ${piano ? "text-ink" : "text-muted"}`}>
+          {piano ? "Piano on" : "Piano"}
+        </button>
+        <label className="flex flex-1 items-center gap-3 text-sm text-muted">
+          Soft
+          <input aria-label="Piano volume" type="range" min={0} max={1} step={0.01} value={volume} className="w-full accent-ink" onChange={(e) => onVolume(Number(e.target.value))} />
+        </label>
       </div>
       <button type="button" onClick={active ? onStop : onStart} className="mt-6 h-12 w-full bg-ink text-sm text-bg">
         {active ? "End session" : mode === "break" ? "Start a 5-minute break" : "Start focus"}
       </button>
     </section>
-  );
-}
-
-function SoundPicker({ sound, onPlay, compact = false }: { sound: SoundKind | null; onPlay: (k: SoundKind) => void; compact?: boolean }) {
-  return (
-    <div className={`grid gap-3 ${compact ? "" : "sm:grid-cols-2"}`}>
-      {SOUNDS.map((item) => (
-        <button key={item.id} type="button" onClick={() => onPlay(item.id)} className={`border p-4 text-left ${sound === item.id ? "border-ink bg-bg" : "border-line"}`}>
-          <p className="font-display text-2xl">{item.title}</p>
-          <p className="mt-1 text-sm text-muted">{item.copy}</p>
-          <p className="mt-3 text-xs text-accent">{sound === item.id ? "Playing" : "Play"}</p>
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -795,6 +793,7 @@ function Tasks({
   onNewAssignment,
   onNewExam,
   onNewNote,
+  part,
 }: {
   assignments: Assignment[];
   exams: Exam[];
@@ -806,12 +805,15 @@ function Tasks({
   onNewAssignment: () => void;
   onNewExam: () => void;
   onNewNote: () => void;
+  part: "due" | "notes";
 }) {
   const sortedA = [...assignments].sort((a, b) => Number(a.completed) - Number(b.completed) || a.due.localeCompare(b.due));
   const sortedE = [...exams].sort((a, b) => a.date.localeCompare(b.date));
   const sortedN = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className={`grid gap-6 ${part === "due" ? "lg:grid-cols-2" : ""}`}>
+      {part === "due" ? (
+        <>
       <Panel title="Assignments" action="Add" onAction={onNewAssignment}>
         {sortedA.length === 0 ? <Empty copy="Add one so a deadline does not sneak up." /> : sortedA.map((a) => (
           <div key={a.id} className="flex items-center gap-2 border-t border-line py-3">
@@ -842,6 +844,8 @@ function Tasks({
           );
         })}
       </Panel>
+        </>
+      ) : (
       <Panel title="Notes" action="New" onAction={onNewNote}>
         {sortedN.length === 0 ? <Empty copy="A formula, a reading, a reminder." /> : sortedN.map((n) => (
           <button key={n.id} type="button" onClick={() => onEditNote(n)} className="block w-full border-t border-line py-3 text-left">
@@ -850,6 +854,7 @@ function Tasks({
           </button>
         ))}
       </Panel>
+      )}
     </div>
   );
 }
