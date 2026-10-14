@@ -260,7 +260,7 @@ function Home() {
           <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
             <div className="max-w-xl">
               <p className="text-sm text-muted">{date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
-              <h1 className="mt-2 text-4xl leading-tight md:text-5xl">{headings[view].title}</h1>
+              <h1 className="mt-2 text-[2.7rem] leading-[1.08] md:text-6xl">{headings[view].title}</h1>
               <p className="mt-3 text-muted">{headings[view].copy}</p>
             </div>
             {view === "today" ? <Goal minutes={totalToday} goal={store.preferences.dailyGoal} /> : null}
@@ -387,7 +387,7 @@ function Home() {
           const Icon = item.icon;
           const active = view === item.id;
           return (
-            <button key={item.id} type="button" onClick={() => go(item.id)} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] ${active ? "text-ink" : "text-muted"}`}>
+            <button key={item.id} type="button" onClick={() => go(item.id)} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${active ? "text-ink" : "text-muted"}`}>
               <Icon size={18} strokeWidth={1.5} />
               {item.label}
             </button>
