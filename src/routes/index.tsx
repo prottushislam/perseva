@@ -62,7 +62,7 @@ function Home() {
   const [breakEnd, setBreakEnd] = useState<number | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [piano, setPiano] = useState(false);
-  const [volume, setVolume] = useState(0.35);
+  const [volume, setVolume] = useState(0.8);
   const audio = useRef<Soundscape | null>(null);
   const ending = useRef(false);
 
@@ -188,7 +188,8 @@ function Home() {
           return;
         }
         store.startSession(subject, duration);
-        setToast("One small step. The rest can wait.");
+        if (!piano) void togglePiano();
+        setToast("Piano is on. Turn your phone volume up if it is quiet.");
       }}
       onStop={() => {
         if (store.session) setConfirmEnd(true);
@@ -766,15 +767,13 @@ function FocusCard(props: {
           ) : null}
         </div>
       ) : null}
-      <div className="flex items-center justify-between gap-4">
-        <button type="button" onClick={onPiano} className={`h-11 px-1 text-sm ${piano ? "text-ink" : "text-muted"}`}>
-          {piano ? "Piano on" : "Piano"}
-        </button>
-        <label className="flex flex-1 items-center gap-3 text-sm text-muted">
-          Soft
-          <input aria-label="Piano volume" type="range" min={0} max={1} step={0.01} value={volume} className="w-full accent-ink" onChange={(e) => onVolume(Number(e.target.value))} />
-        </label>
-      </div>
+      <button type="button" onClick={onPiano} className={`h-12 w-full text-sm ${piano ? "bg-ink text-bg" : "border border-ink"}`}>
+        {piano ? "Piano playing — tap to stop" : "Play piano"}
+      </button>
+      <label className="mt-4 flex items-center gap-3 text-sm text-muted">
+        Volume
+        <input aria-label="Piano volume" type="range" min={0} max={1} step={0.01} value={volume} className="w-full accent-ink" onChange={(e) => onVolume(Number(e.target.value))} />
+      </label>
       <button type="button" onClick={active ? onStop : onStart} className="mt-6 h-12 w-full bg-ink text-sm text-bg">
         {active ? "End session" : mode === "break" ? "Start a 5-minute break" : "Start focus"}
       </button>
