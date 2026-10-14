@@ -287,7 +287,9 @@ function Home() {
               streak={streak}
               finished={finishedToday}
               hasAny={store.routines.length > 0}
-              focusing={Boolean(store.session)}
+              focus={focusCard}
+              sound={sound}
+              onPlaySound={(id) => void playSound(id)}
               onToggle={(id) => store.toggleCompletion(`${today}:${id}`)}
               onEdit={setEditor}
               onAdd={() => setEditor(blankRoutine(date.getDay()))}
@@ -295,7 +297,6 @@ function Home() {
                 store.addStarter();
                 setToast("A weekday plan is in place. Change it as you like.");
               }}
-              onOpenFocus={() => go("focus")}
               onOpenSchedule={(day) => {
                 setSelectedDay(day);
                 setPlanTab("week");
@@ -545,12 +546,13 @@ function Today({
   streak,
   finished,
   hasAny,
-  focusing,
+  focus,
+  sound,
+  onPlaySound,
   onToggle,
   onEdit,
   onAdd,
   onStarter,
-  onOpenFocus,
   onOpenSchedule,
   onOpenTasks,
 }: {
@@ -565,12 +567,13 @@ function Today({
   streak: number;
   finished: number;
   hasAny: boolean;
-  focusing: boolean;
+  focus: ReactNode;
+  sound: SoundId | null;
+  onPlaySound: (id: SoundId) => void;
   onToggle: (id: string) => void;
   onEdit: (r: Routine) => void;
   onAdd: () => void;
   onStarter: () => void;
-  onOpenFocus: () => void;
   onOpenSchedule: (day: number) => void;
   onOpenTasks: () => void;
 }) {
@@ -578,13 +581,29 @@ function Today({
   const nextExam = [...exams].sort((a, b) => a.date.localeCompare(b.date))[0];
   return (
     <div className="space-y-6">
-      <button type="button" onClick={onOpenFocus} className="flex w-full items-center justify-between border border-line bg-surface px-5 py-4 text-left">
-        <span>
-          <span className="block text-xs text-muted">Focus</span>
-          <span className="mt-1 block font-display text-2xl">{focusing ? "A session is open" : "Start a quiet sitting"}</span>
-        </span>
-        <span className="text-sm text-accent">{focusing ? "Return" : "Open"}</span>
-      </button>
+      <div className="grid items-start gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="space-y-6">
+          {focus}
+          <section className="border border-line bg-surface p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-2xl">The room</h2>
+              <span className="text-sm text-muted">{sound ? "Playing" : "Off"}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {SOUNDS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onPlaySound(item.id)}
+                  className={`h-12 rounded-xl text-sm ${sound === item.id ? "bg-accent text-[#06211a]" : "border border-line text-muted"}`}
+                >
+                  {item.title}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+        <div className="space-y-6">
       <section className="border border-line bg-surface p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-2xl">Today’s schedule</h2>
@@ -594,8 +613,8 @@ function Today({
           </div>
           <div className="mb-4 grid grid-cols-7 gap-1">
             {[1, 2, 3, 4, 5, 6, 0].map((d) => (
-              <button key={d} type="button" onClick={() => onOpenSchedule(d)} className={`h-10 text-xs ${d === date.getDay() ? "bg-accent text-[#06211a]" : "text-muted"}`}>
-                {DAYS[d].slice(0, 1)}
+              <button key={d} type="button" onClick={() => onOpenSchedule(d)} className={`h-11 rounded-xl text-xs ${d === date.getDay() ? "bg-accent text-[#06211a]" : "text-muted"}`}>
+                {DAYS[d]}
               </button>
             ))}
           </div>
@@ -618,6 +637,8 @@ function Today({
             </div>
           )}
         </section>
+        </div>
+      </div>
       <section className="border border-line bg-surface p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-2xl">Coming up</h2>
@@ -657,7 +678,7 @@ function Today({
 
 function Stat({ icon, label, value, hint }: { icon: ReactNode; label: string; value: string; hint: string }) {
   return (
-    <div className="flex items-center gap-3 border border-line bg-surface px-4 py-4">
+    <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-4">
       <span className="text-muted">{icon}</span>
       <div>
         <p className="text-xs text-muted">{label}</p>
