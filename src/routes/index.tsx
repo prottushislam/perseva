@@ -6,6 +6,7 @@ import {
   Check,
   Clock3,
   Flame,
+  Headphones,
   LayoutDashboard,
   Menu,
   Pencil,
@@ -27,17 +28,18 @@ import {
   type Note,
   type Routine,
 } from "@/lib/study";
-import { Soundscape } from "@/lib/soundscape";
+import { Ambience, SOUNDS, type SoundId } from "@/lib/soundscape";
 
 export const Route = createFileRoute("/")({ component: Home });
 
-type View = "today" | "focus" | "plan" | "progress";
+type View = "today" | "focus" | "plan" | "sound" | "progress";
 type PlanTab = "week" | "due" | "notes";
 
 const NAV: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "today", label: "Today", icon: LayoutDashboard },
   { id: "focus", label: "Focus", icon: Timer },
   { id: "plan", label: "Plan", icon: CalendarDays },
+  { id: "sound", label: "Sound", icon: Headphones },
   { id: "progress", label: "Progress", icon: Flame },
 ];
 
@@ -61,9 +63,9 @@ function Home() {
   const [mode, setMode] = useState<"focus" | "break">("focus");
   const [breakEnd, setBreakEnd] = useState<number | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const [piano, setPiano] = useState(false);
+  const [sound, setSound] = useState<SoundId | null>(null);
   const [volume, setVolume] = useState(0.8);
-  const audio = useRef<Soundscape | null>(null);
+  const audio = useRef<Ambience | null>(null);
   const ending = useRef(false);
 
   useEffect(() => {
@@ -139,15 +141,20 @@ function Home() {
     setMenu(false);
   }
 
-  async function togglePiano() {
-    if (piano) {
-      audio.current?.stop();
-      setPiano(false);
+  async function playSound(id: SoundId) {
+    if (!audio.current) audio.current = new Ambience();
+    if (sound === id) {
+      audio.current.stop();
+      setSound(null);
       return;
     }
-    if (!audio.current) audio.current = new Soundscape();
-    await audio.current.play(volume);
-    setPiano(true);
+    try {
+      await audio.current.play(id, volume);
+      setSound(id);
+    } catch {
+      setSound(null);
+      setToast("The sound could not start. Tap again, and check your volume.");
+    }
   }
 
   function changeVolume(value: number) {
@@ -160,8 +167,9 @@ function Home() {
       title: store.preferences.name ? `Good to see you, ${store.preferences.name}.` : "A little further, every day.",
       copy: "Today’s hours, what is due, and a quiet place to focus.",
     },
-    focus: { title: "Stay with one thing.", copy: "Set the length. Piano, if you want it." },
+    focus: { title: "Stay with one thing.", copy: "Set the length. A sound can stay with you." },
     plan: { title: "The week and what is due.", copy: "Hours, deadlines, and the notes you want to keep." },
+    sound: { title: "A quieter room.", copy: "Pick one. It keeps playing while you study." },
     progress: { title: "The time you have given.", copy: "A week, a streak, and the sessions you finished." },
   };
 
@@ -178,18 +186,20 @@ function Home() {
       session={store.session}
       breakEnd={breakEnd}
       now={now}
-      piano={piano}
-      volume={volume}
-      onVolume={changeVolume}
-      onPiano={() => void togglePiano()}
+      piano={sound}
+      onOpenSound={() => go("sound")}
+      onStopSound={() => {
+        audio.current?.stop();
+        setSound(null);
+      }}
       onStart={() => {
         if (mode === "break") {
           setBreakEnd(Date.now() + 5 * 60_000);
           return;
         }
         store.startSession(subject, duration);
-        if (!piano) void togglePiano();
-        setToast("Piano is on. Turn your phone volume up if it is quiet.");
+        if (!sound) void playSound("piano");
+        setToast(sound ? "Session started." : "Piano is on. You can change it in Sound.");
       }}
       onStop={() => {
         if (store.session) setConfirmEnd(true);
@@ -359,16 +369,25 @@ function Home() {
             </div>
           ) : null}
 
+          {view === "sound" ? (
+            <SoundRoom
+              current={sound}
+              volume={volume}
+              onVolume={changeVolume}
+              onPlay={(id) => void playSound(id)}
+            />
+          ) : null}
+
           {view === "progress" ? <Progress weekly={weekly} history={store.history} streak={streak} goal={store.preferences.dailyGoal} /> : null}
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-surface md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-surface md:hidden">
         {NAV.map((item) => {
           const Icon = item.icon;
           const active = view === item.id;
           return (
-            <button key={item.id} type="button" onClick={() => go(item.id)} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${active ? "text-ink" : "text-muted"}`}>
+            <button key={item.id} type="button" onClick={() => go(item.id)} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] ${active ? "text-ink" : "text-muted"}`}>
               <Icon size={18} strokeWidth={1.5} />
               {item.label}
             </button>
@@ -376,7 +395,26 @@ function Home() {
         })}
       </nav>
 
-      {toast ? <div className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 bg-ink px-4 py-3 text-sm text-bg md:bottom-6">{toast}</div> : null}
+      {toast ? <div className={`fixed left-1/2 z-40 -translate-x-1/2 bg-ink px-4 py-3 text-sm text-bg ${sound ? "bottom-32 md:bottom-20" : "bottom-20 md:bottom-6"}`}>{toast}</div> : null}
+
+      {sound ? (
+        <div className="fixed inset-x-0 bottom-16 z-30 flex items-center justify-between gap-3 border-t border-line bg-surface px-4 py-3 md:bottom-0 md:left-60">
+          <p className="min-w-0 truncate text-sm">
+            <span className="text-muted">Playing </span>
+            {SOUNDS.find((item) => item.id === sound)?.title}
+          </p>
+          <button
+            type="button"
+            className="h-10 shrink-0 px-2 text-sm text-accent"
+            onClick={() => {
+              audio.current?.stop();
+              setSound(null);
+            }}
+          >
+            Stop
+          </button>
+        </div>
+      ) : null}
 
       {editor ? (
         <RoutineDialog
@@ -706,14 +744,13 @@ function FocusCard(props: {
   session: { subject: string; endsAt: number; duration: number } | null;
   breakEnd: number | null;
   now: number;
-  piano: boolean;
-  volume: number;
-  onVolume: (n: number) => void;
-  onPiano: () => void;
+  piano: SoundId | null;
+  onOpenSound: () => void;
+  onStopSound: () => void;
   onStart: () => void;
   onStop: () => void;
 }) {
-  const { mode, setMode, duration, setDuration, custom, setCustom, subject, setSubject, session, breakEnd, now, piano, volume, onVolume, onPiano, onStart, onStop } = props;
+  const { mode, setMode, duration, setDuration, custom, setCustom, subject, setSubject, session, breakEnd, now, piano, onOpenSound, onStopSound, onStart, onStop } = props;
   const running = mode === "break" ? breakEnd : session?.endsAt;
   const total = mode === "break" ? 300 : (session?.duration || duration) * 60;
   const seconds = running ? Math.max(0, Math.ceil((running - now) / 1000)) : total;
@@ -767,16 +804,60 @@ function FocusCard(props: {
           ) : null}
         </div>
       ) : null}
-      <button type="button" onClick={onPiano} className={`h-12 w-full text-sm ${piano ? "bg-ink text-bg" : "border border-ink"}`}>
-        {piano ? "Piano playing — tap to stop" : "Play piano"}
-      </button>
-      <label className="mt-4 flex items-center gap-3 text-sm text-muted">
-        Volume
-        <input aria-label="Piano volume" type="range" min={0} max={1} step={0.01} value={volume} className="w-full accent-ink" onChange={(e) => onVolume(Number(e.target.value))} />
-      </label>
+      <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+        <button type="button" onClick={onOpenSound} className="text-left">
+          <span className="block text-xs text-muted">Sound</span>
+          <span className="mt-1 block text-sm">{piano ? SOUNDS.find((item) => item.id === piano)?.title : "None yet"}</span>
+        </button>
+        {piano ? (
+          <button type="button" onClick={onStopSound} className="h-11 px-3 text-sm text-accent">
+            Stop
+          </button>
+        ) : (
+          <button type="button" onClick={onOpenSound} className="h-11 border border-line px-4 text-sm">
+            Choose
+          </button>
+        )}
+      </div>
       <button type="button" onClick={active ? onStop : onStart} className="mt-6 h-12 w-full bg-ink text-sm text-bg">
         {active ? "End session" : mode === "break" ? "Start a 5-minute break" : "Start focus"}
       </button>
+    </section>
+  );
+}
+
+function SoundRoom({
+  current,
+  volume,
+  onVolume,
+  onPlay,
+}: {
+  current: SoundId | null;
+  volume: number;
+  onVolume: (n: number) => void;
+  onPlay: (id: SoundId) => void;
+}) {
+  return (
+    <section className="border border-line bg-surface">
+      <label className="flex items-center gap-4 border-b border-line px-5 py-4 text-sm text-muted">
+        Volume
+        <input aria-label="Sound volume" type="range" min={0} max={1} step={0.01} value={volume} className="w-full accent-ink" onChange={(e) => onVolume(Number(e.target.value))} />
+      </label>
+      {SOUNDS.map((item) => {
+        const on = current === item.id;
+        return (
+          <button key={item.id} type="button" onClick={() => onPlay(item.id)} className="flex w-full items-center justify-between gap-4 border-b border-line px-5 py-5 text-left last:border-b-0">
+            <span>
+              <span className="block font-display text-3xl">{item.title}</span>
+              <span className="mt-1 block text-sm text-muted">{item.copy}</span>
+            </span>
+            <span className={`shrink-0 text-sm ${on ? "text-accent" : "text-muted"}`}>{on ? "Playing" : "Play"}</span>
+          </button>
+        );
+      })}
+      <p className="px-5 py-4 text-xs leading-relaxed text-muted">
+        Piano and Quiet are from Mixkit. Rain and Forest are Mixkit sound effects. They play only in this app.
+      </p>
     </section>
   );
 }

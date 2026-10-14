@@ -1,93 +1,42 @@
-const MELODY = [261.63, 329.63, 392.0, 493.88, 392.0, 329.63, 293.66, 349.23];
+export type SoundId = "piano" | "quiet" | "rain" | "forest";
 
-export class Soundscape {
-  private ctx: AudioContext | null = null;
-  private master: GainNode | null = null;
-  private sources: AudioScheduledSourceNode[] = [];
-  private timer: number | null = null;
-  playing = false;
+export const SOUNDS: { id: SoundId; title: string; copy: string; src: string }[] = [
+  { id: "piano", title: "Piano", copy: "A short, quiet piece. Good for reading.", src: "/audio/piano.mp3" },
+  { id: "quiet", title: "Quiet", copy: "Slow music, nothing busy.", src: "/audio/quiet.mp3" },
+  { id: "rain", title: "Rain", copy: "Soft rain, looping.", src: "/audio/rain.mp3" },
+  { id: "forest", title: "Forest", copy: "Rain under the trees.", src: "/audio/forest.mp3" },
+];
 
-  async play(volume: number) {
+export class Ambience {
+  private audio: HTMLAudioElement | null = null;
+  id: SoundId | null = null;
+
+  async play(id: SoundId, volume: number) {
+    const track = SOUNDS.find((item) => item.id === id);
+    if (!track) return;
     this.stop();
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) throw new Error("Audio is not available in this browser.");
-    if (!this.ctx || this.ctx.state === "closed") this.ctx = new Ctx();
-    if (this.ctx.state === "suspended") await this.ctx.resume();
-    const master = this.ctx.createGain();
-    master.gain.value = clamp(volume);
-    master.connect(this.ctx.destination);
-    this.master = master;
-    this.playing = true;
-    let step = 0;
-    const next = () => {
-      if (!this.ctx || !this.playing || !this.master) return;
-      const note = MELODY[step % MELODY.length];
-      this.hammer(this.ctx, this.master, note, 0.55);
-      if (step % 2 === 0) this.hammer(this.ctx, this.master, note / 2, 0.28);
-      step += 1;
-      if (this.sources.length > 40) this.sources.splice(0, this.sources.length - 20);
-    };
-    next();
-    this.timer = window.setInterval(next, 2200);
+    const audio = new Audio(track.src);
+    audio.loop = true;
+    audio.volume = clamp(volume);
+    this.audio = audio;
+    this.id = id;
+    await audio.play();
   }
 
   volume(value: number) {
-    if (!this.master || !this.ctx) return;
-    this.master.gain.setTargetAtTime(clamp(value), this.ctx.currentTime, 0.05);
+    if (this.audio) this.audio.volume = clamp(value);
   }
 
   stop() {
-    if (this.timer !== null) window.clearInterval(this.timer);
-    this.timer = null;
-    this.playing = false;
-    for (const source of this.sources) {
-      try {
-        source.stop();
-      } catch {
-        /* already stopped */
-      }
-    }
-    this.sources = [];
-    this.master?.disconnect();
-    this.master = null;
+    if (!this.audio) return;
+    this.audio.pause();
+    this.audio.src = "";
+    this.audio = null;
+    this.id = null;
   }
 
   dispose() {
     this.stop();
-    void this.ctx?.close();
-    this.ctx = null;
-  }
-
-  private hammer(ctx: AudioContext, master: GainNode, freq: number, level: number) {
-    const now = ctx.currentTime;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(2800, now);
-    filter.frequency.exponentialRampToValueAtTime(900, now + 1.6);
-    const voice = ctx.createGain();
-    voice.gain.setValueAtTime(0.0001, now);
-    voice.gain.exponentialRampToValueAtTime(Math.max(0.05, level), now + 0.02);
-    voice.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
-    filter.connect(voice);
-    voice.connect(master);
-    const partials: [number, OscillatorType, number][] = [
-      [1, "triangle", 1],
-      [2, "sine", 0.35],
-      [3, "sine", 0.16],
-      [4, "sine", 0.08],
-    ];
-    for (const [ratio, type, amount] of partials) {
-      const osc = ctx.createOscillator();
-      const partial = ctx.createGain();
-      osc.type = type;
-      osc.frequency.value = freq * ratio;
-      partial.gain.value = amount;
-      osc.connect(partial);
-      partial.connect(filter);
-      osc.start(now);
-      osc.stop(now + 2.5);
-      this.sources.push(osc);
-    }
   }
 }
 
