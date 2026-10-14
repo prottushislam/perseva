@@ -57,6 +57,10 @@
   border-bottom-color: var(--color-ink);
 }
 
+.timer-ring {
+  background: conic-gradient(var(--color-ink) var(--p, 0%), var(--color-line) 0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

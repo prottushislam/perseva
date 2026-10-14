@@ -8,8 +8,8 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Perseva — A private study room" },
-      { name: "description", content: "One sitting at a time. A quiet room for focus, the week, and what is due." },
+      { title: "Perseva — A little further, every day" },
+      { name: "description", content: "A quiet study space for focus, a weekly plan, deadlines, notes, and peaceful sound." },
       { name: "theme-color", content: "#f6f1e8" },
     ],
     links: [

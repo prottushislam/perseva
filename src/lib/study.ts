@@ -83,7 +83,7 @@ type Actions = {
   addStarter: () => void;
   toggleCompletion: (key: string) => void;
   startSession: (subject: string, minutes: number) => void;
-  endSession: (completed: boolean, reflection: string) => void;
+  endSession: (completed: boolean, reflection?: string) => void;
   setIntention: (day: string, text: string) => void;
   setPreferences: (next: Preferences) => void;
   upsertAssignment: (item: Assignment) => void;
@@ -167,7 +167,7 @@ export const useStudy = create<Data & Actions>()(
               minutes,
               endedAt: Date.now(),
               completed,
-              reflection: reflection.trim().slice(0, 280),
+              reflection: (reflection ?? "").trim().slice(0, 280),
             },
           ].slice(-400),
         }));

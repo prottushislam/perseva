@@ -1,9 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  BookOpen,
+  CalendarDays,
+  Check,
+  Clock3,
+  Flame,
+  Headphones,
+  LayoutDashboard,
+  Menu,
+  Pencil,
+  Plus,
+  Settings2,
+  Timer,
+  Trash2,
+} from "lucide-react";
+import {
   DAYS,
   dayKey,
   daysUntil,
+  dueLabel,
   routineActive,
   timeLabel,
   useStudy,
@@ -16,64 +32,47 @@ import { Soundscape, type SoundKind } from "@/lib/soundscape";
 
 export const Route = createFileRoute("/")({ component: Home });
 
-type View = "room" | "week" | "shelf" | "record";
+type View = "today" | "schedule" | "focus" | "tasks" | "sounds" | "progress";
 
-const NAV: { id: View; label: string }[] = [
-  { id: "room", label: "Room" },
-  { id: "week", label: "Week" },
-  { id: "shelf", label: "Shelf" },
-  { id: "record", label: "Record" },
+const NAV: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: "today", label: "Today", icon: LayoutDashboard },
+  { id: "schedule", label: "Schedule", icon: CalendarDays },
+  { id: "focus", label: "Focus", icon: Timer },
+  { id: "tasks", label: "Tasks", icon: BookOpen },
+  { id: "sounds", label: "Sounds", icon: Headphones },
+  { id: "progress", label: "Progress", icon: Flame },
 ];
 
-const SITTINGS = [
-  { minutes: 25, label: "25", hint: "A short sitting" },
-  { minutes: 50, label: "50", hint: "A full block" },
-  { minutes: 90, label: "90", hint: "A long stretch" },
+const SOUNDS: { id: SoundKind; title: string; copy: string }[] = [
+  { id: "piano", title: "Piano", copy: "Soft notes, far apart." },
+  { id: "violin", title: "Violin", copy: "A slow bow, barely there." },
+  { id: "cello", title: "Cello", copy: "Low and warm, never hurried." },
+  { id: "rain", title: "Rain", copy: "A quiet hush behind the work." },
 ];
 
 function Home() {
-  const routines = useStudy((s) => s.routines);
-  const session = useStudy((s) => s.session);
-  const history = useStudy((s) => s.history);
-  const completions = useStudy((s) => s.completions);
-  const preferences = useStudy((s) => s.preferences);
-  const assignments = useStudy((s) => s.assignments);
-  const exams = useStudy((s) => s.exams);
-  const notes = useStudy((s) => s.notes);
-  const intentionByDay = useStudy((s) => s.intentionByDay);
-  const upsertRoutine = useStudy((s) => s.upsertRoutine);
-  const removeRoutine = useStudy((s) => s.removeRoutine);
-  const addStarter = useStudy((s) => s.addStarter);
-  const toggleCompletion = useStudy((s) => s.toggleCompletion);
-  const startSession = useStudy((s) => s.startSession);
-  const endSession = useStudy((s) => s.endSession);
-  const setPreferences = useStudy((s) => s.setPreferences);
-  const setIntention = useStudy((s) => s.setIntention);
-  const upsertAssignment = useStudy((s) => s.upsertAssignment);
-  const removeAssignment = useStudy((s) => s.removeAssignment);
-  const toggleAssignment = useStudy((s) => s.toggleAssignment);
-  const upsertExam = useStudy((s) => s.upsertExam);
-  const removeExam = useStudy((s) => s.removeExam);
-  const upsertNote = useStudy((s) => s.upsertNote);
-  const removeNote = useStudy((s) => s.removeNote);
-
+  const store = useStudy();
   const [ready, setReady] = useState(false);
-  const [view, setView] = useState<View>("room");
+  const [view, setView] = useState<View>("today");
   const [now, setNow] = useState(() => Date.now());
-  const [day, setDay] = useState(() => new Date().getDay());
-  const [begin, setBegin] = useState(false);
-  const [subject, setSubject] = useState("");
-  const [minutes, setMinutes] = useState(50);
-  const [closing, setClosing] = useState<null | { completed: boolean }>(null);
-  const [line, setLine] = useState("");
-  const [sound, setSound] = useState<SoundKind | null>(null);
-  const [volume, setVolume] = useState(0.2);
+  const [menu, setMenu] = useState(false);
+  const [toast, setToast] = useState("");
+  const [settings, setSettings] = useState(false);
   const [editor, setEditor] = useState<Routine | null>(null);
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [exam, setExam] = useState<Exam | null>(null);
-  const [page, setPage] = useState<Note | null>(null);
-  const [nameOpen, setNameOpen] = useState(false);
+  const [note, setNote] = useState<Note | null>(null);
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDay());
+  const [duration, setDuration] = useState(25);
+  const [custom, setCustom] = useState(false);
+  const [subject, setSubject] = useState("Deep work");
+  const [mode, setMode] = useState<"focus" | "break">("focus");
+  const [breakEnd, setBreakEnd] = useState<number | null>(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [sound, setSound] = useState<SoundKind | null>(null);
+  const [volume, setVolume] = useState(0.35);
   const audio = useRef<Soundscape | null>(null);
+  const ending = useRef(false);
 
   useEffect(() => {
     void useStudy.persist.rehydrate();
@@ -85,26 +84,68 @@ function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(""), 4200);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!store.session || store.session.endsAt > now || ending.current) return;
+    ending.current = true;
+    store.endSession(true);
+    setMode("break");
+    setToast("You showed up. That session is kept.");
+    ending.current = false;
+  }, [now, store]);
+
+  useEffect(() => {
+    if (breakEnd && breakEnd <= now) {
+      setBreakEnd(null);
+      setMode("focus");
+      setToast("Break over. Another small step when you are ready.");
+    }
+  }, [breakEnd, now]);
+
   const date = new Date(now);
   const today = dayKey(date);
-  const todayBlocks = routines
+  const todayRoutines = store.routines
     .filter((r) => r.enabled && r.days.includes(date.getDay()))
     .sort((a, b) => a.start.localeCompare(b.start));
-  const current = todayBlocks.find((r) => routineActive(r, date));
-  const upcoming = todayBlocks.find((r) => r.start > `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`);
-  const horizon = useMemo(() => {
-    const items = [
-      ...assignments.filter((a) => !a.completed).map((a) => ({ id: a.id, title: a.title, subject: a.subject, date: a.due, kind: "Work" as const })),
-      ...exams.map((e) => ({ id: e.id, title: e.title, subject: e.subject, date: e.date, kind: "Exam" as const })),
-    ].filter((item) => daysUntil(item.date) >= 0);
-    items.sort((a, b) => a.date.localeCompare(b.date));
-    return items.slice(0, 3);
-  }, [assignments, exams]);
+  const totalToday = store.history
+    .filter((h) => dayKey(new Date(h.endedAt)) === today)
+    .reduce((sum, h) => sum + h.minutes, 0);
+  const finishedToday = store.completions.filter((x) => x.startsWith(`${today}:`)).length;
 
-  const studiedDays = useMemo(() => {
-    const set = new Set(history.filter((h) => h.minutes >= 1).map((h) => dayKey(new Date(h.endedAt))));
-    return set;
-  }, [history]);
+  const streak = useMemo(() => {
+    const active = new Set(store.history.filter((h) => h.minutes >= 1).map((h) => dayKey(new Date(h.endedAt))));
+    let count = 0;
+    const cursor = new Date(date);
+    if (!active.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+    while (active.has(dayKey(cursor))) {
+      count += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  }, [store.history, today]);
+
+  const weekly = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(date);
+      const mondayOffset = (d.getDay() + 6) % 7;
+      d.setDate(d.getDate() - mondayOffset + i);
+      const key = dayKey(d);
+      const minutes = store.history
+        .filter((h) => dayKey(new Date(h.endedAt)) === key)
+        .reduce((sum, h) => sum + h.minutes, 0);
+      return { label: DAYS[d.getDay()].slice(0, 1), minutes, key };
+    });
+  }, [store.history, today]);
+
+  function go(next: View) {
+    setView(next);
+    setMenu(false);
+  }
 
   async function play(kind: SoundKind) {
     if (sound === kind) {
@@ -117,367 +158,489 @@ function Home() {
     setSound(kind);
   }
 
-  function openBegin(prefill?: string) {
-    setSubject(prefill || current?.subject || upcoming?.subject || "");
-    setMinutes(50);
-    setBegin(true);
+  function changeVolume(value: number) {
+    setVolume(value);
+    audio.current?.volume(value);
   }
 
-  function closeSitting(completed: boolean) {
-    endSession(completed, line);
-    setClosing(null);
-    setLine("");
-    setBegin(false);
-  }
+  const headings: Record<View, { title: string; copy: string }> = {
+    today: {
+      title: store.preferences.name ? `Good to see you, ${store.preferences.name}.` : "A little further, every day.",
+      copy: "Your plan, one focus, and what is coming up.",
+    },
+    schedule: { title: "The week, quietly arranged.", copy: "A subject and a time. That is enough." },
+    focus: { title: "Stay with one thing.", copy: "Set the length, close the rest of the day." },
+    tasks: { title: "What is waiting.", copy: "Assignments, exams, and the notes you want to keep." },
+    sounds: { title: "A softer room.", copy: "Piano, violin, cello, or rain. Nothing loud." },
+    progress: { title: "The time you have given.", copy: "A week, a streak, and the sessions you finished." },
+  };
+
+  const focusCard = (
+    <FocusCard
+      mode={mode}
+      setMode={setMode}
+      duration={duration}
+      setDuration={setDuration}
+      custom={custom}
+      setCustom={setCustom}
+      subject={subject}
+      setSubject={setSubject}
+      session={store.session}
+      breakEnd={breakEnd}
+      now={now}
+      sound={sound}
+      volume={volume}
+      onVolume={changeVolume}
+      onPlay={(kind) => void play(kind)}
+      onStart={() => {
+        if (mode === "break") {
+          setBreakEnd(Date.now() + 5 * 60_000);
+          return;
+        }
+        store.startSession(subject, duration);
+        setToast("One small step. The rest can wait.");
+      }}
+      onStop={() => {
+        if (store.session) setConfirmEnd(true);
+        else setBreakEnd(null);
+      }}
+    />
+  );
 
   return (
     <div className="min-h-screen bg-bg text-ink">
-      <header className="mx-auto flex max-w-5xl items-end justify-between px-5 pt-6 md:px-8 md:pt-8">
-        <button type="button" onClick={() => setView("room")} className="text-left">
-          <span className="font-display text-2xl tracking-tight">Perseva</span>
+      <aside className={`${menu ? "fixed inset-y-0 left-0 z-30 flex" : "hidden"} w-60 flex-col border-r border-line bg-surface px-5 py-8 md:fixed md:flex`}>
+        <button type="button" className="mb-10 px-2 text-left font-display text-3xl" onClick={() => go("today")}>
+          Perseva
         </button>
-        <button type="button" onClick={() => setNameOpen(true)} className="text-sm text-muted">
-          {preferences.name || "Your name"}
-        </button>
-      </header>
-
-      <nav className="mx-auto mt-8 hidden max-w-5xl gap-8 border-b border-line px-8 md:flex">
-        {NAV.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setView(item.id)}
-            className={`-mb-px border-b pb-3 text-sm ${view === item.id ? "border-ink font-medium text-ink" : "border-transparent text-muted"}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      <main className="mx-auto max-w-5xl px-5 py-10 pb-28 md:px-8 md:pb-16">
-        {!ready ? <p className="text-muted">Opening the room…</p> : null}
-
-        {view === "room" ? (
-          <Room
-            date={date}
-            name={preferences.name}
-            intention={intentionByDay[today] ?? ""}
-            onIntention={(text) => setIntention(today, text)}
-            current={current}
-            upcoming={upcoming}
-            horizon={horizon}
-            hasBlocks={routines.length > 0}
-            onBegin={() => openBegin(current?.subject || upcoming?.subject)}
-            onArrange={() => {
-              setDay(date.getDay());
-              setView("week");
-            }}
-            onStarter={addStarter}
-            onShelf={() => setView("shelf")}
-          />
-        ) : null}
-
-        {view === "week" ? (
-          <Week
-            day={day}
-            setDay={setDay}
-            routines={routines}
-            today={today}
-            weekday={date.getDay()}
-            completions={completions}
-            onToggle={(id) => toggleCompletion(`${today}:${id}`)}
-            onEdit={setEditor}
-            onAdd={() => setEditor(blankRoutine(day))}
-          />
-        ) : null}
-
-        {view === "shelf" ? (
-          <Shelf
-            assignments={assignments}
-            exams={exams}
-            notes={notes}
-            onToggle={toggleAssignment}
-            onEditAssignment={setAssignment}
-            onEditExam={setExam}
-            onEditNote={setPage}
-            onNewWork={() => setAssignment(blankAssignment())}
-            onNewExam={() => setExam(blankExam())}
-            onNewPage={() => setPage(blankNote())}
-          />
-        ) : null}
-
-        {view === "record" ? <Record history={history} studiedDays={studiedDays} today={date} /> : null}
-      </main>
-
-      <nav className="fixed inset-x-0 bottom-0 flex justify-around border-t border-line bg-surface py-3 md:hidden">
-        {NAV.map((item) => (
-          <button key={item.id} type="button" onClick={() => setView(item.id)} className={`min-h-11 px-3 text-sm ${view === item.id ? "text-ink" : "text-muted"}`}>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {session ? (
-        <Sitting
-          subject={session.subject}
-          endsAt={session.endsAt}
-          duration={session.duration}
-          now={now}
-          sound={sound}
-          volume={volume}
-          closing={closing !== null || session.endsAt <= now}
-          completed={closing?.completed ?? session.endsAt <= now}
-          line={line}
-          setLine={setLine}
-          onVolume={(value) => {
-            setVolume(value);
-            audio.current?.volume(value);
-          }}
-          onPlay={(kind) => void play(kind)}
-          onLeave={() => setClosing({ completed: false })}
-          onKeep={() => setClosing(null)}
-          onSave={() => closeSitting(closing?.completed ?? true)}
-        />
-      ) : null}
-
-      {begin && !session ? (
-        <Sheet title="Begin a sitting" onClose={() => setBegin(false)}>
-          <label className="block text-sm text-muted">
-            What will you stay with?
-            <input className="field mt-1 text-lg text-ink" value={subject} maxLength={80} onChange={(e) => setSubject(e.target.value)} placeholder="One subject" />
-          </label>
-          <div className="mt-6 grid grid-cols-3 gap-3">
-            {SITTINGS.map((item) => (
+        <nav className="flex flex-col gap-1">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            const active = view === item.id;
+            return (
               <button
-                key={item.minutes}
+                key={item.id}
                 type="button"
-                onClick={() => setMinutes(item.minutes)}
-                className={`border px-2 py-4 text-left ${minutes === item.minutes ? "border-ink bg-surface" : "border-line"}`}
+                onClick={() => go(item.id)}
+                className={`flex h-11 items-center gap-3 px-2 text-left text-sm ${active ? "border-l-2 border-ink pl-3 font-medium text-ink" : "text-muted"}`}
               >
-                <span className="block font-display text-3xl tabular-nums">{item.label}</span>
-                <span className="mt-1 block text-xs text-muted">{item.hint}</span>
+                <Icon size={16} strokeWidth={1.5} />
+                {item.label}
+                {item.id === "focus" && store.session ? <span className="ml-auto size-1.5 rounded-full bg-accent" /> : null}
               </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="mt-8 h-12 w-full bg-ink text-sm text-bg"
-            onClick={() => {
-              startSession(subject.trim() || "Untitled sitting", minutes);
-              setBegin(false);
-            }}
-          >
-            Close the door
-          </button>
-        </Sheet>
-      ) : null}
-
-      {editor ? (
-        <BlockSheet
-          routine={editor}
-          onClose={() => setEditor(null)}
-          onSave={(next) => {
-            if (next.end <= next.start || next.days.length === 0 || !next.subject.trim()) return;
-            upsertRoutine({ ...next, subject: next.subject.trim() });
-            setEditor(null);
-          }}
-          onDelete={() => {
-            removeRoutine(editor.id);
-            setEditor(null);
-          }}
-        />
-      ) : null}
-
-      {assignment ? (
-        <DueSheet
-          title={assignment.title ? "Edit work" : "Work due"}
-          nameLabel="Title"
-          name={assignment.title}
-          subject={assignment.subject}
-          date={assignment.due}
-          note={assignment.note}
-          existing={Boolean(assignment.title)}
-          onClose={() => setAssignment(null)}
-          onDelete={() => {
-            removeAssignment(assignment.id);
-            setAssignment(null);
-          }}
-          onSave={(next) => {
-            upsertAssignment({ ...assignment, ...next, title: next.name });
-            setAssignment(null);
-          }}
-        />
-      ) : null}
-
-      {exam ? (
-        <DueSheet
-          title={exam.title ? "Edit exam" : "Exam"}
-          nameLabel="Exam"
-          name={exam.title}
-          subject={exam.subject}
-          date={exam.date}
-          note={exam.note}
-          existing={Boolean(exam.title)}
-          onClose={() => setExam(null)}
-          onDelete={() => {
-            removeExam(exam.id);
-            setExam(null);
-          }}
-          onSave={(next) => {
-            upsertExam({ ...exam, title: next.name, subject: next.subject, date: next.date, note: next.note });
-            setExam(null);
-          }}
-        />
-      ) : null}
-
-      {page ? (
-        <Sheet title={page.title ? page.title : "A page"} onClose={() => setPage(null)} wide>
-          <PageForm
-            note={page}
-            onDelete={() => {
-              removeNote(page.id);
-              setPage(null);
-            }}
-            onSave={(next) => {
-              upsertNote({ ...next, updatedAt: Date.now() });
-              setPage(null);
-            }}
-          />
-        </Sheet>
-      ) : null}
-
-      {nameOpen ? (
-        <Sheet title="The room is yours" onClose={() => setNameOpen(false)}>
-          <NameForm
-            name={preferences.name}
-            onSave={(name) => {
-              setPreferences({ ...preferences, name: name.slice(0, 40) });
-              setNameOpen(false);
-            }}
-          />
-        </Sheet>
-      ) : null}
-    </div>
-  );
-}
-
-function Room({
-  date,
-  name,
-  intention,
-  onIntention,
-  current,
-  upcoming,
-  horizon,
-  hasBlocks,
-  onBegin,
-  onArrange,
-  onStarter,
-  onShelf,
-}: {
-  date: Date;
-  name: string;
-  intention: string;
-  onIntention: (text: string) => void;
-  current?: Routine;
-  upcoming?: Routine;
-  horizon: { id: string; title: string; subject: string; date: string; kind: "Work" | "Exam" }[];
-  hasBlocks: boolean;
-  onBegin: () => void;
-  onArrange: () => void;
-  onStarter: () => void;
-  onShelf: () => void;
-}) {
-  const focus = current || upcoming;
-  return (
-    <div className="grid items-start gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:gap-20">
-      <section>
-        <p className="text-sm text-muted">{date.toLocaleDateString("en-GB", { weekday: "long" })}</p>
-        <h1 className="mt-2 font-display text-5xl leading-none md:text-7xl">
-          {date.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}
-        </h1>
-        <p className="mt-6 max-w-md text-lg text-muted">
-          {name ? `${name}, one thing is enough.` : "One thing is enough."}
+            );
+          })}
+        </nav>
+        <p className="mt-auto px-2 text-sm leading-relaxed text-muted">
+          A little further, every day.
         </p>
-        <label className="mt-10 block max-w-lg">
-          <span className="text-xs text-muted">Today</span>
-          <input
-            className="field font-display text-2xl"
-            value={intention}
-            maxLength={140}
-            placeholder="I will stay with…"
-            onChange={(e) => onIntention(e.target.value)}
-          />
-        </label>
-      </section>
+      </aside>
+      {menu ? <button type="button" aria-label="Close menu" className="fixed inset-0 z-20 bg-ink/30 md:hidden" onClick={() => setMenu(false)} /> : null}
 
-      <aside>
-        {focus ? (
-          <div>
-            <p className="text-xs text-muted">{current ? "Now" : "Next"}</p>
-            <p className="mt-2 font-display text-3xl">{focus.subject}</p>
-            <p className="mt-1 text-sm tabular-nums text-muted">
-              {timeLabel(focus.start)} – {timeLabel(focus.end)}
-            </p>
-            {focus.note ? <p className="mt-3 text-sm text-muted">{focus.note}</p> : null}
-            <button type="button" onClick={onBegin} className="mt-6 h-12 bg-ink px-6 text-sm text-bg">
-              Sit down
+      <div className="md:pl-60">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/90 px-4 backdrop-blur md:px-8">
+          <div className="flex items-center gap-3 text-sm text-muted">
+            <button type="button" className="grid size-11 place-items-center md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
+              <Menu size={18} />
+            </button>
+            <span className="text-ink">{NAV.find((n) => n.id === view)?.label}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="hidden text-sm text-muted sm:inline">
+              {date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
+            </span>
+            <button type="button" aria-label="Settings" className="grid size-11 place-items-center text-muted" onClick={() => setSettings(true)}>
+              {store.preferences.name ? <span className="font-display text-lg text-ink">{store.preferences.name[0].toUpperCase()}</span> : <Settings2 size={18} />}
             </button>
           </div>
-        ) : (
-          <div>
-            <p className="font-display text-3xl">The day is open.</p>
-            <p className="mt-3 max-w-xs text-sm text-muted">Arrange an hour, or begin without one.</p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button type="button" onClick={onBegin} className="h-12 bg-ink px-5 text-sm text-bg">
-                Begin anyway
-              </button>
-              <button type="button" onClick={onArrange} className="h-12 border border-line px-5 text-sm">
-                Arrange the week
-              </button>
+        </header>
+
+        <main className="mx-auto max-w-6xl px-4 py-8 pb-28 md:px-8 md:pb-12">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
+            <div className="max-w-xl">
+              <p className="text-sm text-muted">{date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
+              <h1 className="mt-2 text-4xl leading-tight md:text-5xl">{headings[view].title}</h1>
+              <p className="mt-3 text-muted">{headings[view].copy}</p>
             </div>
-            {!hasBlocks ? (
-              <button type="button" onClick={onStarter} className="mt-4 text-sm text-accent">
-                Sketch a quiet weekday
+            {view === "today" ? <Goal minutes={totalToday} goal={store.preferences.dailyGoal} /> : null}
+            {view === "schedule" ? (
+              <button type="button" className="h-11 bg-ink px-4 text-sm text-bg" onClick={() => setEditor(blankRoutine(selectedDay))}>
+                Add a block
               </button>
             ) : null}
           </div>
-        )}
 
-        <div className="mt-10 border-t border-line pt-6">
-          <div className="flex items-baseline justify-between">
-            <p className="text-xs text-muted">On the horizon</p>
-            <button type="button" onClick={onShelf} className="text-xs text-accent">
-              Shelf
+          {!ready ? <p className="text-muted">Opening your space…</p> : null}
+
+          {view === "today" ? (
+            <Today
+              routines={todayRoutines}
+              date={date}
+              today={today}
+              completions={store.completions}
+              assignments={store.assignments}
+              exams={store.exams}
+              totalToday={totalToday}
+              goal={store.preferences.dailyGoal}
+              streak={streak}
+              finished={finishedToday}
+              hasAny={store.routines.length > 0}
+              focus={focusCard}
+              onToggle={(id) => store.toggleCompletion(`${today}:${id}`)}
+              onEdit={setEditor}
+              onAdd={() => setEditor(blankRoutine(date.getDay()))}
+              onStarter={() => {
+                store.addStarter();
+                setToast("A weekday plan is in place. Change it as you like.");
+              }}
+              onOpenSchedule={(day) => {
+                setSelectedDay(day);
+                go("schedule");
+              }}
+              onOpenTasks={() => go("tasks")}
+            />
+          ) : null}
+
+          {view === "schedule" ? (
+            <Schedule
+              day={selectedDay}
+              setDay={setSelectedDay}
+              routines={store.routines}
+              today={today}
+              completions={store.completions}
+              onToggle={(id) => store.toggleCompletion(`${today}:${id}`)}
+              onEdit={setEditor}
+              onAdd={() => setEditor(blankRoutine(selectedDay))}
+            />
+          ) : null}
+
+          {view === "focus" ? (
+            <div className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
+              {focusCard}
+              <section className="border border-line bg-surface p-6">
+                <h2 className="text-2xl">Atmosphere</h2>
+                <div className="mt-4">
+                  <SoundPicker sound={sound} onPlay={(kind) => void play(kind)} compact />
+                </div>
+              </section>
+            </div>
+          ) : null}
+
+          {view === "tasks" ? (
+            <Tasks
+              assignments={store.assignments}
+              exams={store.exams}
+              notes={store.notes}
+              onToggle={store.toggleAssignment}
+              onEditAssignment={setAssignment}
+              onEditExam={setExam}
+              onEditNote={setNote}
+              onNewAssignment={() => setAssignment(blankAssignment())}
+              onNewExam={() => setExam(blankExam())}
+              onNewNote={() => setNote(blankNote())}
+            />
+          ) : null}
+
+          {view === "sounds" ? (
+            <section className="border border-line bg-surface p-6">
+              <SoundPicker sound={sound} onPlay={(kind) => void play(kind)} />
+              <label className="mt-8 flex items-center gap-4 text-sm text-muted">
+                Volume
+                <input type="range" min={0} max={1} step={0.01} value={volume} className="flex-1 accent-ink" onChange={(e) => changeVolume(Number(e.target.value))} />
+              </label>
+            </section>
+          ) : null}
+
+          {view === "progress" ? <Progress weekly={weekly} history={store.history} streak={streak} goal={store.preferences.dailyGoal} /> : null}
+        </main>
+      </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line bg-surface md:hidden">
+        {NAV.map((item) => {
+          const Icon = item.icon;
+          const active = view === item.id;
+          return (
+            <button key={item.id} type="button" onClick={() => go(item.id)} className={`flex flex-col items-center gap-1 py-2 text-[11px] ${active ? "text-ink" : "text-muted"}`}>
+              <Icon size={16} strokeWidth={1.5} />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {toast ? <div className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 bg-ink px-4 py-3 text-sm text-bg md:bottom-6">{toast}</div> : null}
+
+      {editor ? (
+        <RoutineDialog
+          routine={editor}
+          onClose={() => setEditor(null)}
+          onSave={(next) => {
+            if (next.end <= next.start) {
+              setToast("End time must be later than the start.");
+              return;
+            }
+            store.upsertRoutine(next);
+            setEditor(null);
+            setToast("Study block saved.");
+          }}
+          onDelete={() => {
+            store.removeRoutine(editor.id);
+            setEditor(null);
+          }}
+        />
+      ) : null}
+      {assignment ? (
+        <AssignmentDialog
+          item={assignment}
+          onClose={() => setAssignment(null)}
+          onSave={(next) => {
+            store.upsertAssignment(next);
+            setAssignment(null);
+            setToast("Assignment saved.");
+          }}
+          onDelete={() => {
+            store.removeAssignment(assignment.id);
+            setAssignment(null);
+          }}
+        />
+      ) : null}
+      {exam ? (
+        <ExamDialog
+          item={exam}
+          onClose={() => setExam(null)}
+          onSave={(next) => {
+            store.upsertExam(next);
+            setExam(null);
+            setToast("Exam saved.");
+          }}
+          onDelete={() => {
+            store.removeExam(exam.id);
+            setExam(null);
+          }}
+        />
+      ) : null}
+      {note ? (
+        <NoteDialog
+          item={note}
+          onClose={() => setNote(null)}
+          onSave={(next) => {
+            store.upsertNote({ ...next, updatedAt: Date.now() });
+            setNote(null);
+            setToast("Note saved.");
+          }}
+          onDelete={() => {
+            store.removeNote(note.id);
+            setNote(null);
+          }}
+        />
+      ) : null}
+      {settings ? (
+        <SettingsDialog
+          name={store.preferences.name}
+          goal={store.preferences.dailyGoal}
+          onClose={() => setSettings(false)}
+          onSave={(name, dailyGoal) => {
+            store.setPreferences({ name: name.slice(0, 40), dailyGoal });
+            setSettings(false);
+            setToast("Saved on this device.");
+          }}
+        />
+      ) : null}
+      {confirmEnd ? (
+        <Modal title="End this session?" onClose={() => setConfirmEnd(false)}>
+          <p className="text-sm leading-relaxed text-muted">The minutes you have already focused will be kept.</p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button type="button" className="h-11 px-4 text-sm" onClick={() => setConfirmEnd(false)}>
+              Keep going
+            </button>
+            <button
+              type="button"
+              className="h-11 bg-ink px-4 text-sm text-bg"
+              onClick={() => {
+                store.endSession(false);
+                setConfirmEnd(false);
+                setToast("Saved. Every bit counts.");
+              }}
+            >
+              End and save
             </button>
           </div>
-          {horizon.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">Nothing due. The shelf is clear.</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {horizon.map((item) => (
-                <li key={item.id} className="flex items-baseline justify-between gap-4">
-                  <span>
-                    <span className="block">{item.title}</span>
-                    <span className="text-xs text-muted">{item.kind} · {item.subject}</span>
-                  </span>
-                  <span className="shrink-0 text-sm tabular-nums text-muted">{when(daysUntil(item.date))}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </aside>
+        </Modal>
+      ) : null}
     </div>
   );
 }
 
-function Week({
+function Goal({ minutes, goal }: { minutes: number; goal: number }) {
+  const pct = Math.min(100, (minutes / Math.max(goal, 1)) * 100);
+  return (
+    <div className="min-w-52 border border-line bg-surface px-4 py-3">
+      <p className="text-xs text-muted">Today</p>
+      <p className="mt-1 font-display text-3xl tabular-nums">
+        {Math.round(minutes)} <span className="text-base text-muted">/ {goal}</span>
+      </p>
+      <div className="mt-3 h-px bg-line">
+        <div className="h-px bg-ink" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function Today({
+  routines,
+  date,
+  today,
+  completions,
+  assignments,
+  exams,
+  totalToday,
+  goal,
+  streak,
+  finished,
+  hasAny,
+  focus,
+  onToggle,
+  onEdit,
+  onAdd,
+  onStarter,
+  onOpenSchedule,
+  onOpenTasks,
+}: {
+  routines: Routine[];
+  date: Date;
+  today: string;
+  completions: string[];
+  assignments: Assignment[];
+  exams: Exam[];
+  totalToday: number;
+  goal: number;
+  streak: number;
+  finished: number;
+  hasAny: boolean;
+  focus: ReactNode;
+  onToggle: (id: string) => void;
+  onEdit: (r: Routine) => void;
+  onAdd: () => void;
+  onStarter: () => void;
+  onOpenSchedule: (day: number) => void;
+  onOpenTasks: () => void;
+}) {
+  const upcoming = [...assignments].filter((a) => !a.completed).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 2);
+  const nextExam = [...exams].sort((a, b) => a.date.localeCompare(b.date))[0];
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
+        {focus}
+        <section className="border border-line bg-surface p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-2xl">Today’s schedule</h2>
+            <button type="button" className="inline-flex h-11 items-center gap-1 text-sm text-accent" onClick={onAdd}>
+              <Plus size={15} /> Add
+            </button>
+          </div>
+          <div className="mb-4 grid grid-cols-7 gap-1">
+            {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+              <button key={d} type="button" onClick={() => onOpenSchedule(d)} className={`h-10 text-xs ${d === date.getDay() ? "bg-ink text-bg" : "text-muted"}`}>
+                {DAYS[d].slice(0, 1)}
+              </button>
+            ))}
+          </div>
+          {routines.length ? (
+            routines.slice(0, 4).map((r) => (
+              <RoutineRow key={r.id} routine={r} done={completions.includes(`${today}:${r.id}`)} active={routineActive(r, date)} onToggle={() => onToggle(r.id)} onEdit={() => onEdit(r)} />
+            ))
+          ) : (
+            <div className="py-8 text-center">
+              <h3 className="text-xl">Nothing planned yet.</h3>
+              <p className="mx-auto mt-2 max-w-xs text-sm text-muted">{hasAny ? "Today is open." : "A subject, a time, a small promise."}</p>
+              <button type="button" className="mt-4 h-11 bg-ink px-4 text-sm text-bg" onClick={onAdd}>
+                Add a block
+              </button>
+              {!hasAny ? (
+                <button type="button" className="mt-3 block w-full text-sm text-accent" onClick={onStarter}>
+                  Or try a weekday plan
+                </button>
+              ) : null}
+            </div>
+          )}
+        </section>
+      </div>
+      <section className="border border-line bg-surface p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-2xl">Coming up</h2>
+          <button type="button" className="text-sm text-accent" onClick={onOpenTasks}>
+            Open tasks
+          </button>
+        </div>
+        {upcoming.length === 0 && !nextExam ? (
+          <p className="text-sm text-muted">No deadlines yet.</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-3">
+            {upcoming.map((a) => (
+              <div key={a.id}>
+                <p className="font-medium">{a.title}</p>
+                <p className="text-xs text-muted">{a.subject}</p>
+                <p className={`mt-2 text-sm ${daysUntil(a.due) < 0 ? "text-accent" : "text-muted"}`}>{dueLabel(daysUntil(a.due), a.completed)}</p>
+              </div>
+            ))}
+            {nextExam ? (
+              <div>
+                <p className="font-medium">{nextExam.title}</p>
+                <p className="text-xs text-muted">Exam · {nextExam.subject}</p>
+                <p className="mt-2 text-sm text-muted">{dueLabel(daysUntil(nextExam.date), false)}</p>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </section>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Stat icon={<Clock3 size={16} />} label="Focused today" value={`${Math.round(totalToday)}`} hint={`/ ${goal} min`} />
+        <Stat icon={<Flame size={16} />} label="Streak" value={`${streak}`} hint={streak === 1 ? "day" : "days"} />
+        <Stat icon={<BookOpen size={16} />} label="Blocks done" value={`${finished}`} hint={`/ ${routines.length}`} />
+      </div>
+    </div>
+  );
+}
+
+function Stat({ icon, label, value, hint }: { icon: ReactNode; label: string; value: string; hint: string }) {
+  return (
+    <div className="flex items-center gap-3 border border-line bg-surface px-4 py-4">
+      <span className="text-muted">{icon}</span>
+      <div>
+        <p className="text-xs text-muted">{label}</p>
+        <p className="font-display text-2xl tabular-nums">
+          {value} <span className="text-sm text-muted">{hint}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RoutineRow({ routine, done, active, onToggle, onEdit }: { routine: Routine; done: boolean; active: boolean; onToggle: () => void; onEdit: () => void }) {
+  return (
+    <div className={`flex items-center gap-3 border-t border-line py-3 ${done ? "opacity-60" : ""}`}>
+      <button type="button" aria-label={done ? `Unmark ${routine.subject}` : `Complete ${routine.subject}`} onClick={onToggle} className={`grid size-10 place-items-center border ${done ? "border-ink bg-ink text-bg" : "border-line"}`}>
+        {done ? <Check size={15} /> : <BookOpen size={15} />}
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{routine.subject}</p>
+        <p className="text-xs tabular-nums text-muted">
+          {timeLabel(routine.start)} – {timeLabel(routine.end)}
+        </p>
+      </div>
+      {active && !done ? <span className="text-xs text-accent">Now</span> : null}
+      <button type="button" aria-label={`Edit ${routine.subject}`} className="grid size-10 place-items-center text-muted" onClick={onEdit}>
+        <Pencil size={15} />
+      </button>
+    </div>
+  );
+}
+
+function Schedule({
   day,
   setDay,
   routines,
   today,
-  weekday,
   completions,
   onToggle,
   onEdit,
@@ -487,7 +650,6 @@ function Week({
   setDay: (d: number) => void;
   routines: Routine[];
   today: string;
-  weekday: number;
   completions: string[];
   onToggle: (id: string) => void;
   onEdit: (r: Routine) => void;
@@ -495,59 +657,134 @@ function Week({
 }) {
   const list = routines.filter((r) => r.days.includes(day)).sort((a, b) => a.start.localeCompare(b.start));
   return (
-    <section>
-      <div className="flex items-end justify-between gap-4">
-        <h1 className="text-4xl md:text-5xl">The week</h1>
-        <button type="button" onClick={onAdd} className="h-11 text-sm text-accent">
-          Add an hour
-        </button>
-      </div>
-      <div className="mt-8 flex gap-2 overflow-x-auto">
+    <section className="border border-line bg-surface p-6">
+      <div className="mb-6 flex flex-wrap gap-2">
         {DAYS.map((label, i) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => setDay(i)}
-            className={`h-16 min-w-14 border px-3 text-left ${i === day ? "border-ink bg-surface" : "border-line text-muted"}`}
-          >
-            <span className="block text-xs">{label}</span>
-            {i === weekday ? <span className="mt-2 block size-1.5 rounded-full bg-accent" /> : null}
+          <button key={label} type="button" onClick={() => setDay(i)} className={`h-11 min-w-12 px-3 text-sm ${i === day ? "bg-ink text-bg" : "text-muted"}`}>
+            {label}
           </button>
         ))}
       </div>
-      <div className="mt-8">
-        {list.length === 0 ? (
-          <p className="border-t border-line py-10 text-muted">Nothing on {DAYS[day]}. Leave it empty, or give it one hour.</p>
-        ) : (
-          list.map((block) => {
-            const done = completions.includes(`${today}:${block.id}`) && day === weekday;
-            return (
-              <div key={block.id} className="grid grid-cols-[7rem_1fr_auto] items-baseline gap-4 border-t border-line py-5">
-                <p className="text-sm tabular-nums text-muted">{timeLabel(block.start)}</p>
-                <button type="button" onClick={() => onEdit(block)} className="text-left">
-                  <span className={`block text-lg ${done ? "text-muted line-through" : ""}`}>{block.subject}</span>
-                  <span className="text-sm text-muted">
-                    until {timeLabel(block.end)}
-                    {block.note ? ` · ${block.note}` : ""}
-                  </span>
-                </button>
-                {day === weekday ? (
-                  <button type="button" onClick={() => onToggle(block.id)} className="text-sm text-accent">
-                    {done ? "Undo" : "Done"}
-                  </button>
-                ) : (
-                  <span />
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
+      <h2 className="mb-2 text-2xl">{DAYS[day]}</h2>
+      {list.length ? (
+        list.map((r) => <RoutineRow key={r.id} routine={r} done={completions.includes(`${today}:${r.id}`)} active={false} onToggle={() => onToggle(r.id)} onEdit={() => onEdit(r)} />)
+      ) : (
+        <div className="py-10 text-center">
+          <p className="text-muted">Nothing on this day.</p>
+          <button type="button" className="mt-4 h-11 bg-ink px-4 text-sm text-bg" onClick={onAdd}>
+            Add a block
+          </button>
+        </div>
+      )}
     </section>
   );
 }
 
-function Shelf({
+function FocusCard(props: {
+  mode: "focus" | "break";
+  setMode: (m: "focus" | "break") => void;
+  duration: number;
+  setDuration: (n: number) => void;
+  custom: boolean;
+  setCustom: (v: boolean) => void;
+  subject: string;
+  setSubject: (s: string) => void;
+  session: { subject: string; endsAt: number; duration: number } | null;
+  breakEnd: number | null;
+  now: number;
+  sound: SoundKind | null;
+  volume: number;
+  onVolume: (n: number) => void;
+  onPlay: (k: SoundKind) => void;
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  const { mode, setMode, duration, setDuration, custom, setCustom, subject, setSubject, session, breakEnd, now, sound, volume, onVolume, onPlay, onStart, onStop } = props;
+  const running = mode === "break" ? breakEnd : session?.endsAt;
+  const total = mode === "break" ? 300 : (session?.duration || duration) * 60;
+  const seconds = running ? Math.max(0, Math.ceil((running - now) / 1000)) : total;
+  const clock = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  const pct = total ? Math.max(0, Math.min(100, (1 - seconds / total) * 100)) : 0;
+  const active = Boolean(session || (mode === "break" && breakEnd));
+  return (
+    <section className="border border-line bg-surface p-6 md:p-8">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-2xl">Focus</h2>
+        <div className="flex border border-line">
+          <button type="button" disabled={Boolean(breakEnd)} className={`h-10 px-3 text-sm ${mode === "focus" ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setMode("focus")}>
+            Focus
+          </button>
+          <button type="button" disabled={Boolean(session)} className={`h-10 px-3 text-sm ${mode === "break" ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setMode("break")}>
+            Break
+          </button>
+        </div>
+      </div>
+      {!session && mode === "focus" ? (
+        <label className="mt-6 block text-sm text-muted">
+          What are you working on?
+          <input value={subject} maxLength={80} onChange={(e) => setSubject(e.target.value)} className="field text-base text-ink" placeholder="One thing" />
+        </label>
+      ) : (
+        <p className="mt-6 text-sm">{session?.subject || "Five quiet minutes"}</p>
+      )}
+      <div className="mx-auto my-8 grid size-56 place-items-center rounded-full p-1 timer-ring" style={{ ["--p" as string]: `${active ? pct : 0}%` }}>
+        <div className="grid size-full place-items-center rounded-full bg-surface text-center">
+          <div>
+            <p className="font-display text-6xl tabular-nums">{clock}</p>
+            <p className="mt-1 px-8 text-xs text-muted">{session ? "Stay with it." : mode === "break" ? "Look away from the page." : "A little focus goes a long way."}</p>
+          </div>
+        </div>
+      </div>
+      {!session && mode === "focus" ? (
+        <div className="mb-4 flex flex-wrap justify-center gap-2">
+          {[25, 45, 60].map((m) => (
+            <button key={m} type="button" className={`h-10 px-3 text-sm ${!custom && duration === m ? "bg-ink text-bg" : "text-muted"}`} onClick={() => { setCustom(false); setDuration(m); }}>
+              {m} min
+            </button>
+          ))}
+          <button type="button" className={`h-10 px-3 text-sm ${custom ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setCustom(!custom)}>
+            Custom
+          </button>
+          {custom ? (
+            <label className="flex h-10 items-center gap-1 text-sm">
+              <input type="number" min={1} max={180} value={duration} aria-label="Custom minutes" className="w-14 border-b border-line bg-transparent text-center outline-none" onChange={(e) => setDuration(Math.max(1, Math.min(180, Number(e.target.value) || 1)))} />
+              min
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-3 text-sm">
+          {SOUNDS.map((item) => (
+            <button key={item.id} type="button" onClick={() => onPlay(item.id)} className={sound === item.id ? "text-ink" : "text-muted"}>
+              {item.title}
+            </button>
+          ))}
+        </div>
+        <input aria-label="Sound volume" type="range" min={0} max={1} step={0.01} value={volume} className="w-24 accent-ink" onChange={(e) => onVolume(Number(e.target.value))} />
+      </div>
+      <button type="button" onClick={active ? onStop : onStart} className="mt-6 h-12 w-full bg-ink text-sm text-bg">
+        {active ? "End session" : mode === "break" ? "Start a 5-minute break" : "Start focus"}
+      </button>
+    </section>
+  );
+}
+
+function SoundPicker({ sound, onPlay, compact = false }: { sound: SoundKind | null; onPlay: (k: SoundKind) => void; compact?: boolean }) {
+  return (
+    <div className={`grid gap-3 ${compact ? "" : "sm:grid-cols-2"}`}>
+      {SOUNDS.map((item) => (
+        <button key={item.id} type="button" onClick={() => onPlay(item.id)} className={`border p-4 text-left ${sound === item.id ? "border-ink bg-bg" : "border-line"}`}>
+          <p className="font-display text-2xl">{item.title}</p>
+          <p className="mt-1 text-sm text-muted">{item.copy}</p>
+          <p className="mt-3 text-xs text-accent">{sound === item.id ? "Playing" : "Play"}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Tasks({
   assignments,
   exams,
   notes,
@@ -555,9 +792,9 @@ function Shelf({
   onEditAssignment,
   onEditExam,
   onEditNote,
-  onNewWork,
+  onNewAssignment,
   onNewExam,
-  onNewPage,
+  onNewNote,
 }: {
   assignments: Assignment[];
   exams: Exam[];
@@ -566,231 +803,121 @@ function Shelf({
   onEditAssignment: (a: Assignment) => void;
   onEditExam: (e: Exam) => void;
   onEditNote: (n: Note) => void;
-  onNewWork: () => void;
+  onNewAssignment: () => void;
   onNewExam: () => void;
-  onNewPage: () => void;
+  onNewNote: () => void;
 }) {
-  const work = [...assignments].sort((a, b) => Number(a.completed) - Number(b.completed) || a.due.localeCompare(b.due));
-  const tests = [...exams].sort((a, b) => a.date.localeCompare(b.date));
-  const pages = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
+  const sortedA = [...assignments].sort((a, b) => Number(a.completed) - Number(b.completed) || a.due.localeCompare(b.due));
+  const sortedE = [...exams].sort((a, b) => a.date.localeCompare(b.date));
+  const sortedN = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
   return (
-    <div className="grid gap-16 lg:grid-cols-2">
-      <section>
-        <div className="flex items-end justify-between">
-          <h1 className="text-4xl">Due</h1>
-          <div className="flex gap-4 text-sm">
-            <button type="button" className="text-accent" onClick={onNewWork}>Work</button>
-            <button type="button" className="text-accent" onClick={onNewExam}>Exam</button>
+    <div className="grid gap-6 lg:grid-cols-3">
+      <Panel title="Assignments" action="Add" onAction={onNewAssignment}>
+        {sortedA.length === 0 ? <Empty copy="Add one so a deadline does not sneak up." /> : sortedA.map((a) => (
+          <div key={a.id} className="flex items-center gap-2 border-t border-line py-3">
+            <button type="button" aria-label={`Toggle ${a.title}`} onClick={() => onToggle(a.id)} className={`grid size-10 place-items-center border ${a.completed ? "border-ink bg-ink text-bg" : "border-line"}`}>
+              {a.completed ? <Check size={15} /> : <BookOpen size={15} />}
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{a.title}</p>
+              <p className="text-xs text-muted">{a.subject} · {a.priority}</p>
+            </div>
+            <span className={`text-xs ${daysUntil(a.due) < 0 && !a.completed ? "text-accent" : "text-muted"}`}>{dueLabel(daysUntil(a.due), a.completed)}</span>
+            <button type="button" aria-label="Edit assignment" onClick={() => onEditAssignment(a)} className="grid size-10 place-items-center text-muted"><Pencil size={15} /></button>
           </div>
-        </div>
-        {work.length + tests.length === 0 ? (
-          <p className="mt-8 text-muted">Nothing is waiting. Add work or an exam when it has a date.</p>
-        ) : (
-          <div className="mt-6">
-            {work.map((item) => (
-              <div key={item.id} className="grid grid-cols-[1fr_auto] gap-3 border-t border-line py-4">
-                <button type="button" className="text-left" onClick={() => onEditAssignment(item)}>
-                  <span className={item.completed ? "text-muted line-through" : ""}>{item.title}</span>
-                  <span className="mt-1 block text-xs text-muted">Work · {item.subject}</span>
-                </button>
-                <button type="button" onClick={() => onToggle(item.id)} className="text-right text-sm tabular-nums text-muted">
-                  {item.completed ? "Done" : when(daysUntil(item.due))}
-                </button>
+        ))}
+      </Panel>
+      <Panel title="Exams" action="Add" onAction={onNewExam}>
+        {sortedE.length === 0 ? <Empty copy="Add an exam so revision has a date." /> : sortedE.map((e) => {
+          const days = daysUntil(e.date);
+          return (
+            <div key={e.id} className="flex items-center gap-2 border-t border-line py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{e.title}</p>
+                <p className="text-xs text-muted">{e.subject}</p>
               </div>
-            ))}
-            {tests.map((item) => (
-              <button key={item.id} type="button" onClick={() => onEditExam(item)} className="grid w-full grid-cols-[1fr_auto] gap-3 border-t border-line py-4 text-left">
-                <span>
-                  {item.title}
-                  <span className="mt-1 block text-xs text-muted">Exam · {item.subject}</span>
-                </span>
-                <span className="text-sm tabular-nums text-muted">{when(daysUntil(item.date))}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-      <section>
-        <div className="flex items-end justify-between">
-          <h1 className="text-4xl">Pages</h1>
-          <button type="button" className="text-sm text-accent" onClick={onNewPage}>New page</button>
-        </div>
-        {pages.length === 0 ? (
-          <p className="mt-8 text-muted">A page for a proof, a reading, a thing you do not want to lose.</p>
-        ) : (
-          <div className="mt-6">
-            {pages.map((note) => (
-              <button key={note.id} type="button" onClick={() => onEditNote(note)} className="block w-full border-t border-line py-4 text-left">
-                <span className="font-display text-2xl">{note.title || "Untitled"}</span>
-                <span className="mt-1 block line-clamp-2 text-sm text-muted">{note.content}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
+              <span className={`text-xs ${days >= 0 && days <= 7 ? "text-accent" : "text-muted"}`}>{days < 0 ? "Passed" : days === 0 ? "Today" : days === 1 ? "Tomorrow" : `${days} days`}</span>
+              <button type="button" aria-label="Edit exam" onClick={() => onEditExam(e)} className="grid size-10 place-items-center text-muted"><Pencil size={15} /></button>
+            </div>
+          );
+        })}
+      </Panel>
+      <Panel title="Notes" action="New" onAction={onNewNote}>
+        {sortedN.length === 0 ? <Empty copy="A formula, a reading, a reminder." /> : sortedN.map((n) => (
+          <button key={n.id} type="button" onClick={() => onEditNote(n)} className="block w-full border-t border-line py-3 text-left">
+            <p className="truncate font-medium">{n.title || "Untitled"}</p>
+            <p className="truncate text-xs text-muted">{n.subject || "General"}</p>
+          </button>
+        ))}
+      </Panel>
     </div>
   );
 }
 
-function Record({
-  history,
-  studiedDays,
-  today,
-}: {
-  history: { id: string; subject: string; minutes: number; endedAt: number; completed: boolean; reflection?: string }[];
-  studiedDays: Set<string>;
-  today: Date;
-}) {
-  const week = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    const offset = (d.getDay() + 6) % 7;
-    d.setDate(d.getDate() - offset + i);
-    return { key: dayKey(d), label: DAYS[d.getDay()] };
-  });
-  const count = week.filter((d) => studiedDays.has(d.key)).length;
-  const recent = [...history].reverse().slice(0, 12);
+function Panel({ title, action, onAction, children }: { title: string; action: string; onAction: () => void; children: ReactNode }) {
   return (
-    <section>
-      <h1 className="max-w-xl text-4xl md:text-5xl">
-        {count === 0 ? "No sittings yet this week." : count === 1 ? "One day this week." : `${count} days this week.`}
-      </h1>
-      <div className="mt-8 flex gap-3">
-        {week.map((d) => (
-          <div key={d.key} className="text-center">
-            <div className={`size-8 border ${studiedDays.has(d.key) ? "border-accent bg-accent" : "border-line bg-surface"}`} />
-            <p className="mt-2 text-xs text-muted">{d.label.slice(0, 1)}</p>
-          </div>
-        ))}
+    <section className="border border-line bg-surface p-6">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-2xl">{title}</h2>
+        <button type="button" onClick={onAction} className="inline-flex h-11 items-center gap-1 text-sm text-accent">
+          <Plus size={15} /> {action}
+        </button>
       </div>
-      <div className="mt-12">
-        {recent.length === 0 ? (
-          <p className="text-muted">When you close a sitting, it stays here with whatever you wrote.</p>
-        ) : (
-          recent.map((item) => (
-            <article key={item.id} className="border-t border-line py-6">
-              <p className="text-xs text-muted">
-                {new Date(item.endedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                {" · "}
-                {Math.round(item.minutes)} min
-                {item.completed ? "" : " · left early"}
-              </p>
-              <h2 className="mt-1 text-2xl">{item.subject}</h2>
-              {item.reflection ? <p className="mt-2 max-w-xl text-muted">{item.reflection}</p> : null}
-            </article>
-          ))
-        )}
-      </div>
+      {children}
     </section>
   );
 }
 
-function Sitting({
-  subject,
-  endsAt,
-  duration,
-  now,
-  sound,
-  volume,
-  closing,
-  completed,
-  line,
-  setLine,
-  onVolume,
-  onPlay,
-  onLeave,
-  onKeep,
-  onSave,
-}: {
-  subject: string;
-  endsAt: number;
-  duration: number;
-  now: number;
-  sound: SoundKind | null;
-  volume: number;
-  closing: boolean;
-  completed: boolean;
-  line: string;
-  setLine: (s: string) => void;
-  onVolume: (n: number) => void;
-  onPlay: (k: SoundKind) => void;
-  onLeave: () => void;
-  onKeep: () => void;
-  onSave: () => void;
-}) {
-  const total = duration * 60;
-  const seconds = Math.max(0, Math.ceil((endsAt - now) / 1000));
-  const clock = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  const gone = total ? Math.min(100, ((total - seconds) / total) * 100) : 0;
+function Empty({ copy }: { copy: string }) {
+  return <p className="py-6 text-sm text-muted">{copy}</p>;
+}
+
+function Progress({ weekly, history, streak, goal }: { weekly: { label: string; minutes: number; key: string }[]; history: { id: string; subject: string; minutes: number; endedAt: number; completed: boolean }[]; streak: number; goal: number }) {
+  const weekTotal = weekly.reduce((s, d) => s + d.minutes, 0);
+  const max = Math.max(goal, ...weekly.map((d) => d.minutes), 1);
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-ink text-bg">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 py-8">
-        <p className="text-sm text-line">The door is closed</p>
-        <p className="mt-3 font-display text-3xl">{subject}</p>
-        <div className="flex flex-1 flex-col items-center justify-center">
-          <p className="font-display text-7xl tabular-nums md:text-8xl">{clock}</p>
-          <div className="mt-8 h-px w-full max-w-sm bg-line/40">
-            <div className="h-px bg-bg" style={{ width: `${gone}%` }} />
-          </div>
-        </div>
-        {closing ? (
-          <div>
-            <p className="font-display text-3xl">{completed ? "The hour is kept." : "Leave it here?"}</p>
-            <label className="mt-4 block text-sm text-line">
-              One line, if you want it remembered
-              <input
-                className="mt-2 w-full border-0 border-b border-line/50 bg-transparent py-2 text-lg text-bg outline-none"
-                value={line}
-                maxLength={280}
-                placeholder="What moved"
-                onChange={(e) => setLine(e.target.value)}
-              />
-            </label>
-            <div className="mt-6 flex gap-3">
-              {!completed ? (
-                <button type="button" onClick={onKeep} className="h-12 border border-line/40 px-5 text-sm">
-                  Stay
-                </button>
-              ) : null}
-              <button type="button" onClick={onSave} className="h-12 bg-bg px-5 text-sm text-ink">
-                Close the sitting
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex gap-4 text-sm">
-              {(["rain", "stream", "piano"] as const).map((kind) => (
-                <button key={kind} type="button" onClick={() => onPlay(kind)} className={sound === kind ? "text-bg" : "text-line"}>
-                  {kind === "piano" ? "Keys" : kind === "stream" ? "Water" : "Rain"}
-                </button>
-              ))}
-              <input aria-label="Atmosphere" type="range" min={0} max={1} step={0.01} value={volume} className="w-20 accent-bg" onChange={(e) => onVolume(Number(e.target.value))} />
-            </div>
-            <button type="button" onClick={onLeave} className="h-11 text-sm text-line">
-              Leave
-            </button>
-          </div>
-        )}
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Stat icon={<Clock3 size={16} />} label="This week" value={`${Math.round(weekTotal)}`} hint="min" />
+        <Stat icon={<Flame size={16} />} label="Streak" value={`${streak}`} hint={streak === 1 ? "day" : "days"} />
+        <Stat icon={<BookOpen size={16} />} label="Sessions" value={`${history.length}`} hint="total" />
       </div>
+      <section className="border border-line bg-surface p-6">
+        <h2 className="mb-6 text-2xl">This week</h2>
+        <div className="flex h-44 items-end gap-3">
+          {weekly.map((d) => (
+            <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
+              <div className="flex h-32 w-full items-end bg-line/40">
+                <div className="w-full bg-ink" style={{ height: `${(d.minutes / max) * 100}%` }} />
+              </div>
+              <span className="text-xs text-muted">{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="border border-line bg-surface p-6">
+        <h2 className="mb-2 text-2xl">Recent sessions</h2>
+        {history.length === 0 ? <p className="text-sm text-muted">Finished sessions gather here.</p> : history.slice(-8).reverse().map((h) => (
+          <div key={h.id} className="flex items-center justify-between border-t border-line py-3 text-sm">
+            <div>
+              <p className="font-medium">{h.subject}</p>
+              <p className="text-xs text-muted">{new Date(h.endedAt).toLocaleDateString()} · {h.completed ? "Completed" : "Ended early"}</p>
+            </div>
+            <p className="tabular-nums">{Math.round(h.minutes)} min</p>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
 
-function Sheet({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-ink/40 sm:items-center sm:justify-center" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        className={`max-h-[92vh] w-full overflow-auto bg-surface p-6 ${wide ? "sm:max-w-2xl" : "sm:max-w-md"}`}
-      >
-        <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 grid place-items-end bg-ink/40 p-4 sm:place-items-center" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={title} className="max-h-[90vh] w-full max-w-lg overflow-auto bg-surface p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-5 flex items-center justify-between">
           <h2 className="text-3xl">{title}</h2>
-          <button type="button" onClick={onClose} className="text-sm text-muted">
-            Close
-          </button>
+          <button type="button" className="text-sm text-muted" onClick={onClose}>Close</button>
         </div>
         {children}
       </div>
@@ -798,197 +925,121 @@ function Sheet({ title, onClose, children, wide = false }: { title: string; onCl
   );
 }
 
-function BlockSheet({
-  routine,
-  onClose,
-  onSave,
-  onDelete,
-}: {
-  routine: Routine;
-  onClose: () => void;
-  onSave: (r: Routine) => void;
-  onDelete: () => void;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="mb-4 block text-sm text-muted">
+      {label}
+      <div className="mt-1">{children}</div>
+    </label>
+  );
+}
+
+const inputClass = "field";
+
+function RoutineDialog({ routine, onClose, onSave, onDelete }: { routine: Routine; onClose: () => void; onSave: (r: Routine) => void; onDelete: () => void }) {
   const [draft, setDraft] = useState(routine);
   return (
-    <Sheet title={routine.subject ? "This hour" : "An hour"} onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSave(draft);
-        }}
-      >
-        <label className="block text-sm text-muted">
-          Subject
-          <input required className="field" value={draft.subject} maxLength={80} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
-        </label>
-        <label className="mt-4 block text-sm text-muted">
-          A note to yourself
-          <input className="field" value={draft.note} maxLength={160} onChange={(e) => setDraft({ ...draft, note: e.target.value })} />
-        </label>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <label className="text-sm text-muted">
-            From
-            <input type="time" required className="field" value={draft.start} onChange={(e) => setDraft({ ...draft, start: e.target.value })} />
-          </label>
-          <label className="text-sm text-muted">
-            Until
-            <input type="time" required className="field" value={draft.end} onChange={(e) => setDraft({ ...draft, end: e.target.value })} />
-          </label>
+    <Modal title={routine.subject ? "Edit block" : "New study block"} onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); if (!draft.subject.trim() || draft.days.length === 0) return; onSave({ ...draft, subject: draft.subject.trim() }); }}>
+        <Field label="Subject"><input required maxLength={80} className={inputClass} value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></Field>
+        <Field label="Note"><input maxLength={200} className={inputClass} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Start"><input type="time" required className={inputClass} value={draft.start} onChange={(e) => setDraft({ ...draft, start: e.target.value })} /></Field>
+          <Field label="End"><input type="time" required className={inputClass} value={draft.end} onChange={(e) => setDraft({ ...draft, end: e.target.value })} /></Field>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           {DAYS.map((label, i) => {
             const on = draft.days.includes(i);
             return (
-              <button
-                key={label}
-                type="button"
-                className={`h-10 min-w-11 border px-2 text-sm ${on ? "border-ink" : "border-line text-muted"}`}
-                onClick={() => setDraft({ ...draft, days: on ? draft.days.filter((d) => d !== i) : [...draft.days, i].sort() })}
-              >
+              <button key={label} type="button" className={`h-10 min-w-11 px-2 text-sm ${on ? "bg-ink text-bg" : "text-muted"}`} onClick={() => setDraft({ ...draft, days: on ? draft.days.filter((d) => d !== i) : [...draft.days, i].sort() })}>
                 {label}
               </button>
             );
           })}
         </div>
-        <div className="mt-8 flex items-center justify-between">
-          {routine.subject ? (
-            <button type="button" onClick={onDelete} className="text-sm text-accent">
-              Remove
-            </button>
-          ) : (
-            <span />
-          )}
-          <button type="submit" className="h-11 bg-ink px-5 text-sm text-bg">
-            Keep this hour
-          </button>
-        </div>
+        <DialogActions existing={Boolean(routine.subject)} onDelete={onDelete} />
       </form>
-    </Sheet>
+    </Modal>
   );
 }
 
-function DueSheet({
-  title,
-  nameLabel,
-  name,
-  subject,
-  date,
-  note,
-  existing,
-  onClose,
-  onDelete,
-  onSave,
-}: {
-  title: string;
-  nameLabel: string;
-  name: string;
-  subject: string;
-  date: string;
-  note: string;
-  existing: boolean;
-  onClose: () => void;
-  onDelete: () => void;
-  onSave: (next: { name: string; subject: string; date: string; note: string }) => void;
-}) {
-  const [draft, setDraft] = useState({ name, subject, date, note });
+function AssignmentDialog({ item, onClose, onSave, onDelete }: { item: Assignment; onClose: () => void; onSave: (a: Assignment) => void; onDelete: () => void }) {
+  const [draft, setDraft] = useState(item);
   return (
-    <Sheet title={title} onClose={onClose}>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!draft.name.trim() || !draft.subject.trim()) return;
-          onSave({ ...draft, name: draft.name.trim(), subject: draft.subject.trim() });
-        }}
-      >
-        <label className="block text-sm text-muted">
-          {nameLabel}
-          <input required className="field" value={draft.name} maxLength={120} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        </label>
-        <label className="mt-4 block text-sm text-muted">
-          Subject
-          <input required className="field" value={draft.subject} maxLength={80} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
-        </label>
-        <label className="mt-4 block text-sm text-muted">
-          Date
-          <input type="date" required className="field" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
-        </label>
-        <label className="mt-4 block text-sm text-muted">
-          Note
-          <textarea className="field" rows={3} maxLength={300} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} />
-        </label>
-        <div className="mt-8 flex items-center justify-between">
-          {existing ? (
-            <button type="button" onClick={onDelete} className="text-sm text-accent">
-              Remove
-            </button>
-          ) : (
-            <span />
-          )}
-          <button type="submit" className="h-11 bg-ink px-5 text-sm text-bg">
-            Save
-          </button>
-        </div>
+    <Modal title={item.title ? "Edit assignment" : "New assignment"} onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); onSave({ ...draft, title: draft.title.trim(), subject: draft.subject.trim() }); }}>
+        <Field label="Title"><input required maxLength={120} className={inputClass} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
+        <Field label="Subject"><input required maxLength={80} className={inputClass} value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></Field>
+        <Field label="Due"><input type="date" required className={inputClass} value={draft.due} onChange={(e) => setDraft({ ...draft, due: e.target.value })} /></Field>
+        <Field label="Priority">
+          <select className={inputClass} value={draft.priority} onChange={(e) => setDraft({ ...draft, priority: e.target.value as Assignment["priority"] })}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </Field>
+        <Field label="Note"><textarea maxLength={300} className={inputClass} rows={3} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} /></Field>
+        <DialogActions existing={Boolean(item.title)} onDelete={onDelete} />
       </form>
-    </Sheet>
+    </Modal>
   );
 }
 
-function PageForm({ note, onSave, onDelete }: { note: Note; onSave: (n: Note) => void; onDelete: () => void }) {
-  const [draft, setDraft] = useState(note);
+function ExamDialog({ item, onClose, onSave, onDelete }: { item: Exam; onClose: () => void; onSave: (e: Exam) => void; onDelete: () => void }) {
+  const [draft, setDraft] = useState(item);
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!draft.title.trim()) return;
-        onSave({ ...draft, title: draft.title.trim() });
-      }}
-    >
-      <input required className="field font-display text-3xl" value={draft.title} maxLength={100} placeholder="Title" onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-      <input className="field mt-2 text-sm" value={draft.subject} maxLength={80} placeholder="Subject, if it has one" onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
-      <textarea required className="field mt-4 min-h-48" maxLength={4000} value={draft.content} placeholder="Write it down." onChange={(e) => setDraft({ ...draft, content: e.target.value })} />
-      <div className="mt-6 flex items-center justify-between">
-        {note.title ? (
-          <button type="button" onClick={onDelete} className="text-sm text-accent">
-            Remove
-          </button>
-        ) : (
-          <span />
-        )}
-        <button type="submit" className="h-11 bg-ink px-5 text-sm text-bg">
-          Keep the page
+    <Modal title={item.title ? "Edit exam" : "New exam"} onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); onSave({ ...draft, title: draft.title.trim(), subject: draft.subject.trim() }); }}>
+        <Field label="Title"><input required maxLength={120} className={inputClass} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
+        <Field label="Subject"><input required maxLength={80} className={inputClass} value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></Field>
+        <Field label="Date"><input type="date" required className={inputClass} value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
+        <Field label="Note"><textarea maxLength={300} className={inputClass} rows={3} value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} /></Field>
+        <DialogActions existing={Boolean(item.title)} onDelete={onDelete} />
+      </form>
+    </Modal>
+  );
+}
+
+function NoteDialog({ item, onClose, onSave, onDelete }: { item: Note; onClose: () => void; onSave: (n: Note) => void; onDelete: () => void }) {
+  const [draft, setDraft] = useState(item);
+  return (
+    <Modal title={item.title ? "Edit note" : "New note"} onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); onSave({ ...draft, title: draft.title.trim() }); }}>
+        <Field label="Title"><input required maxLength={100} className={inputClass} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
+        <Field label="Subject"><input maxLength={80} className={inputClass} value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></Field>
+        <Field label="Note"><textarea required maxLength={2000} className={inputClass} rows={7} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} /></Field>
+        <DialogActions existing={Boolean(item.title)} onDelete={onDelete} />
+      </form>
+    </Modal>
+  );
+}
+
+function SettingsDialog({ name, goal, onClose, onSave }: { name: string; goal: number; onClose: () => void; onSave: (name: string, goal: number) => void }) {
+  const [draftName, setDraftName] = useState(name);
+  const [draftGoal, setDraftGoal] = useState(goal);
+  return (
+    <Modal title="Your space" onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); onSave(draftName.trim(), Math.max(15, Math.min(720, draftGoal))); }}>
+        <Field label="Name"><input maxLength={40} className={inputClass} value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="What should we call you?" /></Field>
+        <Field label="Daily intention, in minutes"><input type="number" min={15} max={720} className={inputClass} value={draftGoal} onChange={(e) => setDraftGoal(Number(e.target.value) || 120)} /></Field>
+        <p className="mb-4 text-xs text-muted">Plans, focus, deadlines, and notes stay on this device.</p>
+        <button type="submit" className="h-11 w-full bg-ink text-sm text-bg">Save</button>
+      </form>
+    </Modal>
+  );
+}
+
+function DialogActions({ existing, onDelete }: { existing: boolean; onDelete: () => void }) {
+  return (
+    <div className="mt-2 flex justify-between">
+      {existing ? (
+        <button type="button" onClick={onDelete} className="inline-flex h-11 items-center gap-1 text-sm text-accent">
+          <Trash2 size={14} /> Delete
         </button>
-      </div>
-    </form>
+      ) : <span />}
+      <button type="submit" className="h-11 bg-ink px-5 text-sm text-bg">Save</button>
+    </div>
   );
-}
-
-function NameForm({ name, onSave }: { name: string; onSave: (name: string) => void }) {
-  const [draft, setDraft] = useState(name);
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave(draft.trim());
-      }}
-    >
-      <label className="block text-sm text-muted">
-        What should the room call you?
-        <input className="field text-lg" value={draft} maxLength={40} onChange={(e) => setDraft(e.target.value)} />
-      </label>
-      <p className="mt-4 text-sm text-muted">Sittings, hours, and pages stay on this device.</p>
-      <button type="submit" className="mt-6 h-11 bg-ink px-5 text-sm text-bg">
-        Save
-      </button>
-    </form>
-  );
-}
-
-function when(days: number) {
-  if (days < 0) return "Passed";
-  if (days === 0) return "Today";
-  if (days === 1) return "Tomorrow";
-  return `${days} days`;
 }
 
 function blankRoutine(day: number): Routine {
