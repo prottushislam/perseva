@@ -264,7 +264,6 @@ function Home() {
               <h1 className="mt-3 max-w-xl text-[2.15rem] leading-[1.12] md:text-5xl">{headings[view].title}</h1>
               <p className="mt-3 text-muted">{headings[view].copy}</p>
             </div>
-            {view === "today" ? <Goal minutes={totalToday} goal={store.preferences.dailyGoal} /> : null}
             {view === "plan" && planTab === "week" ? (
               <button type="button" className="h-11 bg-accent px-4 text-sm text-[#06211a]" onClick={() => setEditor(blankRoutine(selectedDay))}>
                 Add a block
@@ -519,21 +518,6 @@ function Home() {
   );
 }
 
-function Goal({ minutes, goal }: { minutes: number; goal: number }) {
-  const pct = Math.min(100, (minutes / Math.max(goal, 1)) * 100);
-  return (
-    <div className="min-w-52 border border-line bg-surface px-4 py-3">
-      <p className="text-xs text-muted">Today</p>
-      <p className="mt-1 font-display text-3xl tabular-nums">
-        {Math.round(minutes)} <span className="text-base text-muted">/ {goal}</span>
-      </p>
-      <div className="mt-3 h-px bg-line">
-        <div className="h-px bg-ink" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
 function Today({
   routines,
   date,
@@ -668,7 +652,7 @@ function Today({
         )}
       </section>
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat icon={<Clock3 size={16} />} label="Focused today" value={`${Math.round(totalToday)}`} hint={`/ ${goal} min`} />
+        <Stat icon={<Clock3 size={16} />} label="Focused today" value={`${Math.round(totalToday)}`} hint={`min of ${goal}`} />
         <Stat icon={<Flame size={16} />} label="Streak" value={`${streak}`} hint={streak === 1 ? "day" : "days"} />
         <Stat icon={<BookOpen size={16} />} label="Blocks done" value={`${finished}`} hint={`/ ${routines.length}`} />
       </div>
