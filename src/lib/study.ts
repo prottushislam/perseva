@@ -63,6 +63,33 @@ export type Note = {
 export type Preferences = {
   name: string;
   dailyGoal: number;
+  breakMinutes: number;
+  largeText: boolean;
+  reducedMotion: boolean;
+  notify: boolean;
+  welcomed: boolean;
+};
+
+export type FocusTemplate = {
+  id: string;
+  name: string;
+  subject: string;
+  minutes: number;
+  breakMinutes: number;
+  sound: "" | "piano" | "quiet" | "rain" | "forest";
+};
+
+export type Alarm = {
+  id: string;
+  label: string;
+  time: string;
+  days: number[];
+  enabled: boolean;
+  sound: "piano" | "quiet" | "rain" | "forest";
+  snooze: number;
+  mission: "none" | "math";
+  lastFired: string;
+  snoozedUntil: number;
 };
 
 type Data = {
@@ -75,6 +102,8 @@ type Data = {
   exams: Exam[];
   notes: Note[];
   intentionByDay: Record<string, string>;
+  templates: FocusTemplate[];
+  alarms: Alarm[];
 };
 
 type Actions = {
@@ -85,7 +114,7 @@ type Actions = {
   startSession: (subject: string, minutes: number) => void;
   endSession: (completed: boolean, reflection?: string) => void;
   setIntention: (day: string, text: string) => void;
-  setPreferences: (next: Preferences) => void;
+  setPreferences: (next: Partial<Preferences>) => void;
   upsertAssignment: (item: Assignment) => void;
   removeAssignment: (id: string) => void;
   toggleAssignment: (id: string) => void;
@@ -93,6 +122,12 @@ type Actions = {
   removeExam: (id: string) => void;
   upsertNote: (item: Note) => void;
   removeNote: (id: string) => void;
+  upsertTemplate: (item: FocusTemplate) => void;
+  removeTemplate: (id: string) => void;
+  upsertAlarm: (item: Alarm) => void;
+  removeAlarm: (id: string) => void;
+  markAlarm: (id: string, patch: Partial<Alarm>) => void;
+  replaceData: (data: Partial<Data>) => void;
 };
 
 const empty: Data = {
@@ -100,11 +135,13 @@ const empty: Data = {
   session: null,
   history: [],
   completions: [],
-  preferences: { name: "", dailyGoal: 120 },
+  preferences: { name: "", dailyGoal: 120, breakMinutes: 5, largeText: false, reducedMotion: false, notify: false, welcomed: false },
   assignments: [],
   exams: [],
   notes: [],
   intentionByDay: {},
+  templates: [],
+  alarms: [],
 };
 
 export const useStudy = create<Data & Actions>()(
@@ -174,7 +211,8 @@ export const useStudy = create<Data & Actions>()(
       },
       setIntention: (day, text) =>
         set((s) => ({ intentionByDay: { ...s.intentionByDay, [day]: text.slice(0, 140) } })),
-      setPreferences: (preferences) => set({ preferences }),
+      setPreferences: (preferences) =>
+        set((s) => ({ preferences: { ...s.preferences, ...preferences } })),
       upsertAssignment: (item) =>
         set((s) => ({
           assignments: s.assignments.some((a) => a.id === item.id)
@@ -200,6 +238,36 @@ export const useStudy = create<Data & Actions>()(
             : [...s.notes, item].slice(0, 100),
         })),
       removeNote: (id) => set((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
+      upsertTemplate: (item) =>
+        set((s) => ({
+          templates: s.templates.some((t) => t.id === item.id)
+            ? s.templates.map((t) => (t.id === item.id ? item : t))
+            : [...s.templates, item].slice(0, 24),
+        })),
+      removeTemplate: (id) => set((s) => ({ templates: s.templates.filter((t) => t.id !== id) })),
+      upsertAlarm: (item) =>
+        set((s) => ({
+          alarms: s.alarms.some((a) => a.id === item.id)
+            ? s.alarms.map((a) => (a.id === item.id ? item : a))
+            : [...s.alarms, item].slice(0, 30),
+        })),
+      removeAlarm: (id) => set((s) => ({ alarms: s.alarms.filter((a) => a.id !== id) })),
+      markAlarm: (id, patch) =>
+        set((s) => ({ alarms: s.alarms.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
+      replaceData: (data) =>
+        set((s) => ({
+          routines: data.routines ?? s.routines,
+          history: data.history ?? s.history,
+          completions: data.completions ?? s.completions,
+          preferences: { ...s.preferences, ...(data.preferences ?? {}) },
+          assignments: data.assignments ?? s.assignments,
+          exams: data.exams ?? s.exams,
+          notes: data.notes ?? s.notes,
+          intentionByDay: data.intentionByDay ?? s.intentionByDay,
+          templates: data.templates ?? s.templates,
+          alarms: data.alarms ?? s.alarms,
+          session: data.session === undefined ? s.session : data.session,
+        })),
     }),
     {
       name: "perseva-space",
@@ -214,7 +282,19 @@ export const useStudy = create<Data & Actions>()(
         exams: s.exams,
         notes: s.notes,
         intentionByDay: s.intentionByDay,
+        templates: s.templates,
+        alarms: s.alarms,
       }),
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<Data>;
+        return {
+          ...current,
+          ...saved,
+          preferences: { ...current.preferences, ...(saved.preferences ?? {}) },
+          templates: saved.templates ?? [],
+          alarms: saved.alarms ?? [],
+        };
+      },
     },
   ),
 );
@@ -248,4 +328,61 @@ export function dueLabel(days: number, done: boolean) {
   if (days === 0) return "Due today";
   if (days === 1) return "Due tomorrow";
   return `${days}d left`;
+}
+
+function icsStamp(date: string, time = "090000") {
+  return date.replaceAll("-", "") + "T" + time;
+}
+
+function fold(text: string) {
+  return text.replace(/[\r\n]+/g, " ").slice(0, 180);
+}
+
+export function buildCalendar(routines: Routine[], assignments: Assignment[], exams: Exam[]) {
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Perseva//Study//EN", "CALSCALE:GREGORIAN"];
+  for (const routine of routines.filter((item) => item.enabled)) {
+    const byday = routine.days.map((day) => ["SU", "MO", "TU", "WE", "TH", "FR", "SA"][day]).join(",");
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${routine.id}@perseva`,
+      `SUMMARY:${fold(routine.subject)}`,
+      `DESCRIPTION:${fold(routine.note)}`,
+      `DTSTART:${icsStamp("20260105", routine.start.replace(":", "") + "00")}`,
+      `DTEND:${icsStamp("20260105", routine.end.replace(":", "") + "00")}`,
+      byday ? `RRULE:FREQ=WEEKLY;BYDAY=${byday}` : "RRULE:FREQ=WEEKLY",
+      "END:VEVENT",
+    );
+  }
+  for (const item of assignments.filter((entry) => !entry.completed)) {
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${item.id}@perseva`,
+      `SUMMARY:${fold(`${item.subject}: ${item.title}`)}`,
+      `DESCRIPTION:${fold(item.note)}`,
+      `DTSTART;VALUE=DATE:${item.due.replaceAll("-", "")}`,
+      "END:VEVENT",
+    );
+  }
+  for (const exam of exams) {
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${exam.id}@perseva`,
+      `SUMMARY:${fold(`Exam · ${exam.title}`)}`,
+      `DESCRIPTION:${fold(exam.note)}`,
+      `DTSTART;VALUE=DATE:${exam.date.replaceAll("-", "")}`,
+      "END:VEVENT",
+    );
+  }
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+export function downloadText(filename: string, contents: string, type: string) {
+  const blob = new Blob([contents], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

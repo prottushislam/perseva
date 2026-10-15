@@ -76,6 +76,17 @@
   background: conic-gradient(var(--color-ink) var(--p, 0%), var(--color-line) 0);
 }
 
+html[data-text="large"] {
+  font-size: 18px;
+}
+
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

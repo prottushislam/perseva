@@ -157,9 +157,8 @@ export function renderInstallPageHtml(template, { host, url } = {}) {
     .replaceAll("{{APP_URL}}", escapeHtml(stripInstallParams(url)));
 }
 
-export function renderWebManifest(hostHeader, nameOverride) {
-  const override = String(nameOverride ?? "").trim();
-  const name = override || appNameFromHost(hostHeader);
+export function renderWebManifest(hostHeader) {
+  const name = appNameFromHost(hostHeader);
   return JSON.stringify(
     {
       name,
@@ -168,26 +167,13 @@ export function renderWebManifest(hostHeader, nameOverride) {
       start_url: "/",
       scope: "/",
       display: "standalone",
-      background_color: "#12100e",
-      theme_color: "#12100e",
+      background_color: "#000000",
+      theme_color: "#000000",
       icons: [
         {
-          src: "/icon-192.png",
-          sizes: "192x192",
+          src: "/__grok/icon-180.png",
+          sizes: "180x180",
           type: "image/png",
-          purpose: "any",
-        },
-        {
-          src: "/icon-512.png",
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "any",
-        },
-        {
-          src: "/icon-512.png",
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "maskable",
         },
       ],
     },

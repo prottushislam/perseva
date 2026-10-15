@@ -15,7 +15,6 @@ import {
   isInstallQuery,
   renderInstallPageHtml,
   renderWebManifest,
-  readOgSite,
   snapshotOgIdentity,
 } from "./grok-pwa-shared.mjs";
 
@@ -54,7 +53,7 @@ function serveGrokPwa(middlewares) {
     }
 
     if (pathOnly === "/__grok/manifest.webmanifest" || pathOnly === "/__grok/manifest.json") {
-      const body = Buffer.from(renderWebManifest(requestHost(req), readOgSite().title), "utf8");
+      const body = Buffer.from(renderWebManifest(requestHost(req)), "utf8");
       res.statusCode = 200;
       res.setHeader("content-type", "application/manifest+json; charset=utf-8");
       res.setHeader("cache-control", "no-cache");
