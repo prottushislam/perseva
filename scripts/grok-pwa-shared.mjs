@@ -151,21 +151,14 @@ export function stripInstallParams(url) {
   return rest ? `${path}?${rest}` : path;
 }
 
-export function installedAppName(hostHeader, site = {}) {
-  const fromHost = appNameFromHost(hostHeader);
-  if (fromHost !== DEFAULT_APP_NAME) return fromHost;
-  const fromSite = String(site?.title ?? "").trim();
-  return fromSite || DEFAULT_APP_NAME;
-}
-
-export function renderInstallPageHtml(template, { host, url, site } = {}) {
+export function renderInstallPageHtml(template, { host, url } = {}) {
   return String(template)
-    .replaceAll("{{APP_NAME}}", escapeHtml(installedAppName(host, site)))
+    .replaceAll("{{APP_NAME}}", escapeHtml(appNameFromHost(host)))
     .replaceAll("{{APP_URL}}", escapeHtml(stripInstallParams(url)));
 }
 
-export function renderWebManifest(hostHeader, site = {}) {
-  const name = installedAppName(hostHeader, site);
+export function renderWebManifest(hostHeader) {
+  const name = appNameFromHost(hostHeader);
   return JSON.stringify(
     {
       name,
@@ -174,21 +167,9 @@ export function renderWebManifest(hostHeader, site = {}) {
       start_url: "/",
       scope: "/",
       display: "standalone",
-      background_color: "#12100e",
-      theme_color: "#12100e",
+      background_color: "#000000",
+      theme_color: "#000000",
       icons: [
-        {
-          src: "/icon-192.png",
-          sizes: "192x192",
-          type: "image/png",
-          purpose: "any",
-        },
-        {
-          src: "/icon-512.png",
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "any",
-        },
         {
           src: "/__grok/icon-180.png",
           sizes: "180x180",
