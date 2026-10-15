@@ -30,6 +30,7 @@ import {
   type FocusTemplate,
   type Note,
   type Routine,
+  type StudySession,
 } from "@/lib/study";
 import { Ambience, SOUNDS, type SoundId } from "@/lib/soundscape";
 
@@ -273,14 +274,18 @@ function Home() {
       {menu ? <button type="button" aria-label="Close menu" className="fixed inset-0 z-20 bg-scrim/60 md:hidden" onClick={() => setMenu(false)} /> : null}
 
       <div className="md:pl-72">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-line bg-bg/90 px-4 backdrop-blur md:px-8">
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-bg/90 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:h-16 md:px-8">
           <div className="flex items-center gap-3 text-sm text-muted">
-            <button type="button" className="md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
+            <button type="button" className="grid size-11 place-items-center md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
               <img src="/logo.png" alt="" className="size-9 rounded-xl" />
             </button>
-            <span className="text-ink">{NAV.find((n) => n.id === view)?.label}</span>
+            <span className="text-ink">
+              {view === "today"
+                ? date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })
+                : NAV.find((n) => n.id === view)?.label}
+            </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <span className="hidden text-sm text-muted sm:inline">
               {date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
             </span>
@@ -290,23 +295,24 @@ function Home() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 py-8 pb-28 md:px-8 md:pb-12">
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
-            <div className="max-w-xl">
-              <p className="text-sm text-muted">{date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
-              <h1 className="mt-3 max-w-xl text-[2.15rem] leading-[1.12] md:text-5xl">{headings[view].title}</h1>
-              <p className="mt-3 text-muted">{headings[view].copy}</p>
+        <main className="mx-auto max-w-6xl px-4 py-4 pb-28 md:px-8 md:py-8 md:pb-12">
+          {view !== "today" ? (
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4 md:mb-8">
+              <div className="max-w-xl">
+                <h1 className="max-w-xl text-3xl leading-[1.15] md:text-5xl">{headings[view].title}</h1>
+                <p className="mt-2 text-sm text-muted md:text-base">{headings[view].copy}</p>
+              </div>
+              {view === "schedule" ? (
+                <button type="button" className="h-11 bg-accent px-4 text-sm text-[#06211a]" onClick={() => setEditor(blankRoutine(selectedDay))}>
+                  Add a class
+                </button>
+              ) : null}
             </div>
-            {view === "schedule" ? (
-              <button type="button" className="h-11 bg-accent px-4 text-sm text-[#06211a]" onClick={() => setEditor(blankRoutine(selectedDay))}>
-                Add a block
-              </button>
-            ) : null}
-          </div>
+          ) : null}
 
-          {!ready ? <p className="text-muted">Opening your space…</p> : null}
+          {!ready ? <TodaySkeleton /> : null}
 
-          {view === "today" ? (
+          {ready && view === "today" ? (
             <Today
               routines={todayRoutines}
               date={date}
@@ -317,17 +323,31 @@ function Home() {
               totalToday={totalToday}
               goal={store.preferences.dailyGoal}
               streak={streak}
-              finished={finishedToday}
-              hasAny={store.routines.length > 0}
+              name={store.preferences.name}
+              firstVisit={store.routines.length === 0 && store.history.length === 0 && !store.preferences.welcomed}
+              session={store.session}
+              now={now}
               focus={focusCard}
               sound={sound}
               onPlaySound={(id) => void playSound(id)}
               onToggle={(id) => store.toggleCompletion(`${today}:${id}`)}
               onEdit={setEditor}
-              onAdd={() => setEditor(blankRoutine(date.getDay()))}
+              onAdd={() => {
+                store.setPreferences({ welcomed: true });
+                setEditor(blankRoutine(date.getDay()));
+              }}
               onStarter={() => {
                 store.addStarter();
+                store.setPreferences({ welcomed: true });
                 setToast("A weekday plan is in place. Change it as you like.");
+              }}
+              onStartFocus={() => {
+                store.setPreferences({ welcomed: true });
+                if (!store.session) {
+                  store.startSession(subject, duration || 25);
+                  if (!sound) void playSound("piano");
+                }
+                go("focus");
               }}
               onOpenSchedule={(day) => {
                 setSelectedDay(day);
@@ -629,6 +649,30 @@ function Home() {
   );
 }
 
+function greeting(date: Date, name: string) {
+  const hour = date.getHours();
+  const hello = hour < 5 ? "Still up" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 21 ? "Good evening" : "Good night";
+  const line = hour < 5 ? "Rest counts too." : hour < 12 ? "One small start is enough." : hour < 17 ? "Stay with the next thing." : hour < 21 ? "A short session still counts." : "Nothing else has to happen tonight.";
+  return { hello: name ? `${hello}, ${name}.` : `${hello}.`, line };
+}
+
+function nextBlock(routines: Routine[], date: Date, today: string, completions: string[]) {
+  const now = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const open = routines.filter((item) => !completions.includes(`${today}:${item.id}`));
+  return open.find((item) => routineActive(item, date)) ?? open.find((item) => item.start >= now) ?? null;
+}
+
+function TodaySkeleton() {
+  return (
+    <div className="space-y-3" aria-busy="true" aria-label="Loading today">
+      <div className="h-20 rounded-2xl bg-surface" />
+      <div className="h-12 rounded-2xl bg-surface" />
+      <div className="h-28 rounded-2xl bg-surface" />
+      <div className="h-24 rounded-2xl bg-surface" />
+    </div>
+  );
+}
+
 function Today({
   routines,
   date,
@@ -639,8 +683,10 @@ function Today({
   totalToday,
   goal,
   streak,
-  finished,
-  hasAny,
+  name,
+  firstVisit,
+  session,
+  now,
   focus,
   sound,
   onPlaySound,
@@ -648,6 +694,7 @@ function Today({
   onEdit,
   onAdd,
   onStarter,
+  onStartFocus,
   onOpenSchedule,
   onOpenTasks,
 }: {
@@ -660,8 +707,10 @@ function Today({
   totalToday: number;
   goal: number;
   streak: number;
-  finished: number;
-  hasAny: boolean;
+  name: string;
+  firstVisit: boolean;
+  session: StudySession | null;
+  now: number;
   focus: ReactNode;
   sound: SoundId | null;
   onPlaySound: (id: SoundId) => void;
@@ -669,105 +718,147 @@ function Today({
   onEdit: (r: Routine) => void;
   onAdd: () => void;
   onStarter: () => void;
+  onStartFocus: () => void;
   onOpenSchedule: (day: number) => void;
   onOpenTasks: () => void;
 }) {
-  const upcoming = [...assignments].filter((a) => !a.completed).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 2);
-  const nextExam = [...exams].sort((a, b) => a.date.localeCompare(b.date))[0];
+  const hello = greeting(date, name);
+  const next = nextBlock(routines, date, today, completions);
+  const later = routines.filter((item) => item.id !== next?.id).slice(0, 3);
+  const upcoming = [...assignments].filter((item) => !item.completed).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 2);
+  const nextExam = [...exams].filter((item) => daysUntil(item.date) >= 0).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const minutes = Math.round(totalToday);
+  const progress = Math.max(0, Math.min(100, goal ? (totalToday / goal) * 100 : 0));
+  const left = session ? Math.max(0, Math.ceil((session.endsAt - now) / 1000)) : 0;
+  const clock = `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`;
   return (
-    <div className="space-y-6">
-      <div className="grid items-start gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-6">
-          {focus}
-          <section className="border border-line bg-surface p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-2xl">The room</h2>
-              <span className="text-sm text-muted">{sound ? "Playing" : "Off"}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {SOUNDS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onPlaySound(item.id)}
-                  className={`h-12 rounded-xl text-sm ${sound === item.id ? "bg-accent text-[#06211a]" : "border border-line text-muted"}`}
-                >
-                  {item.title}
-                </button>
-              ))}
-            </div>
-          </section>
+    <div className="mx-auto max-w-lg space-y-3 md:max-w-xl">
+      {firstVisit ? (
+        <section className="rounded-2xl border border-line bg-surface p-5">
+          <p className="text-xs text-muted">For students. Free, always.</p>
+          <h1 className="mt-2 text-3xl leading-tight">A little further, every day.</h1>
+          <p className="mt-2 text-sm text-muted">Today’s class, what’s due, and one quiet place to focus.</p>
+          <button type="button" onClick={onStartFocus} className="mt-5 h-12 w-full bg-accent text-sm text-[#06211a]">
+            Start focus
+          </button>
+          <button type="button" onClick={onAdd} className="mt-2 h-12 w-full text-sm text-muted">
+            Add a class
+          </button>
+        </section>
+      ) : (
+        <header>
+          <p className="text-xs text-muted">{date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <div className="mt-1 flex items-end justify-between gap-3">
+            <h1 className="text-3xl leading-tight">{hello.hello}</h1>
+            {streak > 0 ? <p className="mb-1 shrink-0 text-xs text-muted">{streak} day{streak === 1 ? "" : "s"}</p> : null}
+          </div>
+          <p className="mt-1 text-sm text-muted">{hello.line}</p>
+        </header>
+      )}
+
+      {session ? (
+        <button type="button" onClick={onStartFocus} className="flex h-14 w-full items-center justify-between rounded-2xl bg-accent px-4 text-left text-[#06211a]">
+          <span>
+            <span className="block text-xs">Focusing</span>
+            <span className="block text-sm font-medium">{session.subject}</span>
+          </span>
+          <span className="font-display text-3xl tabular-nums">{clock}</span>
+        </button>
+      ) : firstVisit ? null : (
+        <button type="button" onClick={onStartFocus} className="h-12 w-full bg-accent text-sm text-[#06211a]">
+          Start focus
+        </button>
+      )}
+
+      <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Next up">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base">Next up</h2>
+          <button type="button" className="h-11 px-1 text-sm text-accent" onClick={() => onOpenSchedule(date.getDay())}>Week</button>
         </div>
-        <div className="space-y-6">
-      <section className="border border-line bg-surface p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-2xl">Today’s schedule</h2>
-            <button type="button" className="inline-flex h-11 items-center gap-1 text-sm text-accent" onClick={onAdd}>
-              <Plus size={15} /> Add
+        {next ? (
+          <div className="mt-1 flex items-center gap-3">
+            <button type="button" aria-label={`Complete ${next.subject}`} onClick={() => onToggle(next.id)} className="grid size-11 shrink-0 place-items-center rounded-xl border border-line">
+              <Check size={16} />
+            </button>
+            <button type="button" onClick={() => onEdit(next)} className="min-w-0 flex-1 text-left">
+              <p className="truncate font-medium">{next.subject}</p>
+              <p className="text-xs text-muted">{timeLabel(next.start)} – {timeLabel(next.end)}{routineActive(next, date) ? " · now" : ""}</p>
             </button>
           </div>
-          <div className="mb-4 grid grid-cols-7 gap-1">
-            {[1, 2, 3, 4, 5, 6, 0].map((d) => (
-              <button key={d} type="button" onClick={() => onOpenSchedule(d)} className={`h-11 rounded-xl text-xs ${d === date.getDay() ? "bg-accent text-[#06211a]" : "text-muted"}`}>
-                {DAYS[d]}
-              </button>
-            ))}
+        ) : (
+          <div className="pt-2">
+            <p className="text-sm text-muted">No classes today.</p>
+            <button type="button" onClick={onAdd} className="mt-3 h-11 text-sm text-accent">Add a class</button>
           </div>
-          {routines.length ? (
-            routines.slice(0, 4).map((r) => (
-              <RoutineRow key={r.id} routine={r} done={completions.includes(`${today}:${r.id}`)} active={routineActive(r, date)} onToggle={() => onToggle(r.id)} onEdit={() => onEdit(r)} />
-            ))
-          ) : (
-            <div className="py-8 text-center">
-              <h3 className="text-xl">Nothing planned yet.</h3>
-              <p className="mx-auto mt-2 max-w-xs text-sm text-muted">{hasAny ? "Today is open. Rest is allowed." : "A subject, a time, a small promise."}</p>
-              <button type="button" className="mt-4 h-11 bg-accent px-4 text-sm text-[#06211a]" onClick={onAdd}>
-                Add a block
-              </button>
-              {!hasAny ? (
-                <button type="button" className="mt-3 block w-full text-sm text-accent" onClick={onStarter}>
-                  Or try a weekday plan
-                </button>
-              ) : null}
-            </div>
-          )}
-        </section>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-line bg-surface p-4" aria-label="Focus today">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-base">Today</h2>
+          <p className="text-sm tabular-nums text-muted">{minutes > 0 ? `${minutes} min` : "No focus yet"}</p>
         </div>
-      </div>
-      <section className="border border-line bg-surface p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-2xl">Coming up</h2>
-          <button type="button" className="text-sm text-accent" onClick={onOpenTasks}>
-            Open tasks
-          </button>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={goal} aria-valuenow={minutes} aria-label="Minutes focused today">
+          <div className="h-full rounded-full bg-accent" style={{ width: `${progress}%` }} />
+        </div>
+        <p className="mt-2 text-xs text-muted">{minutes > 0 ? "A little further. That is the whole point." : "A short session is enough to begin."}</p>
+      </section>
+
+      {later.length > 0 ? (
+        <section className="rounded-2xl border border-line bg-surface px-4">
+          <h2 className="pt-4 text-base">Also today</h2>
+          {later.map((item) => (
+            <RoutineRow key={item.id} routine={item} done={completions.includes(`${today}:${item.id}`)} active={routineActive(item, date)} onToggle={() => onToggle(item.id)} onEdit={() => onEdit(item)} />
+          ))}
+        </section>
+      ) : null}
+
+      <section className="rounded-2xl border border-line bg-surface p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base">Due</h2>
+          <button type="button" className="h-11 px-1 text-sm text-accent" onClick={onOpenTasks}>All</button>
         </div>
         {upcoming.length === 0 && !nextExam ? (
-          <p className="text-sm text-muted">No deadlines yet.</p>
+          <p className="pt-2 text-sm text-muted">Nothing due soon.</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-3">
-            {upcoming.map((a) => (
-              <div key={a.id}>
-                <p className="font-medium">{a.title}</p>
-                <p className="text-xs text-muted">{a.subject}</p>
-                <p className={`mt-2 text-sm ${daysUntil(a.due) < 0 ? "text-accent" : "text-muted"}`}>{dueLabel(daysUntil(a.due), a.completed)}</p>
-              </div>
+          <div className="mt-2 space-y-3">
+            {upcoming.map((item) => (
+              <button key={item.id} type="button" onClick={onOpenTasks} className="block w-full text-left">
+                <p className="truncate font-medium">{item.title}</p>
+                <p className="text-xs text-muted">{item.subject} · {dueLabel(daysUntil(item.due), false)}</p>
+              </button>
             ))}
             {nextExam ? (
-              <div>
-                <p className="font-medium">{nextExam.title}</p>
-                <p className="text-xs text-muted">Exam · {nextExam.subject}</p>
-                <p className="mt-2 text-sm text-muted">{dueLabel(daysUntil(nextExam.date), false)}</p>
-              </div>
+              <button type="button" onClick={onOpenTasks} className="block w-full text-left">
+                <p className="truncate font-medium">{nextExam.title}</p>
+                <p className="text-xs text-muted">Exam · {dueLabel(daysUntil(nextExam.date), false)}</p>
+              </button>
             ) : null}
           </div>
         )}
       </section>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat icon={<Clock3 size={16} />} label="Focused today" value={`${Math.round(totalToday)}`} hint="min" />
-        <Stat icon={<Flame size={16} />} label="Streak" value={`${streak}`} hint={streak === 1 ? "day" : "days"} />
-        <Stat icon={<BookOpen size={16} />} label="Blocks done" value={`${finished}`} hint={`/ ${routines.length}`} />
-      </div>
-      <p className="text-sm text-muted">About {goal} quiet minutes is enough. A missed day can begin again tomorrow.</p>
+
+      <details className="rounded-2xl border border-line bg-surface">
+        <summary className="flex h-12 cursor-pointer items-center justify-between px-4 text-sm">
+          The room
+          <span className="text-xs text-muted">{sound ? SOUNDS.find((item) => item.id === sound)?.title : "Off"}</span>
+        </summary>
+        <div className="grid grid-cols-2 gap-2 px-4 pb-4 sm:grid-cols-4">
+          {SOUNDS.map((item) => (
+            <button key={item.id} type="button" onClick={() => onPlaySound(item.id)} className={`h-11 rounded-xl text-sm ${sound === item.id ? "bg-accent text-[#06211a]" : "border border-line text-muted"}`}>
+              {item.title}
+            </button>
+          ))}
+        </div>
+      </details>
+
+      {routines.length === 0 ? (
+        <button type="button" onClick={onStarter} className="h-11 w-full text-sm text-muted">
+          Or try a weekday plan
+        </button>
+      ) : null}
+
+      <div className="hidden md:block">{focus}</div>
     </div>
   );
 }

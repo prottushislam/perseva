@@ -87,6 +87,14 @@ html[data-motion="reduce"] *::after {
   transition: none !important;
 }
 
+summary {
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
